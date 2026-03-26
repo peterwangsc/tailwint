@@ -4,6 +4,8 @@
   "description": "Tailwind CSS linter for CI — drives the official language server to catch class issues and auto-fix them",
   "license": "MIT",
   "author": "Peter Wang",
+  "homepage": "https://github.com/peterwangsc/tailwint",
+  "bugs": "https://github.com/peterwangsc/tailwint/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/peterwangsc/tailwint.git"
@@ -14,25 +16,35 @@
     "lint",
     "linter",
     "ci",
+    "autofix",
     "language-server",
-    "lsp"
+    "lsp",
+    "tailwind-v4",
+    "css",
+    "diagnostics",
+    "code-quality"
   ],
   "type": "module",
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "bin": {
-    "tailwint": "./bin/tailwint.js"
+    "tailwint": "bin/tailwint.js"
   },
   "files": [
     "bin",
     "dist"
   ],
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "tsc",
     "test": "tsx --test src/*.test.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
     "glob": "^13.0.6"

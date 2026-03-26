@@ -48,7 +48,7 @@ import {
 // Re-export for tests
 export { applyEdits, type TextEdit } from "./edits.js";
 
-const DEFAULT_PATTERNS = ["**/*.{tsx,jsx,html,vue,svelte}"];
+const DEFAULT_PATTERNS = ["**/*.{tsx,jsx,html,vue,svelte,css}"];
 
 export interface TailwintOptions {
   patterns?: string[];
