@@ -75,13 +75,13 @@ export function waitForDiagnostic(uri: string, timeoutMs = 10_000): Promise<any[
   // Clear stale entry so we wait for the server to re-publish
   diagnosticsReceived.delete(uri);
   return new Promise((res) => {
-    diagWaiters.set(uri, res);
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (diagWaiters.has(uri)) {
         diagWaiters.delete(uri);
         res([]);
       }
     }, timeoutMs);
+    diagWaiters.set(uri, (diags) => { clearTimeout(timer); res(diags); });
   });
 }
 
@@ -212,9 +212,12 @@ export function startServer(root: string) {
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") {
-      console.error("\n  \x1b[38;5;203m\x1b[1mERROR\x1b[0m @tailwindcss/language-server not found.\n");
-      console.error("  Install it: npm install -D @tailwindcss/language-server\n");
-      process.exit(2);
+      // Reject all pending requests so run() can surface the error
+      const msg = "@tailwindcss/language-server not found. Install it: npm install -D @tailwindcss/language-server";
+      for (const [id, p] of pending) {
+        p.reject(new Error(msg));
+        pending.delete(id);
+      }
     }
   });
 

@@ -42,7 +42,7 @@ npm install -D tailwint @tailwindcss/language-server
 ## Usage
 
 ```bash
-# Scan default file types (tsx, jsx, html, vue, svelte, css)
+# Scan default file types (tsx, jsx, html, vue, svelte, astro, mdx, css)
 npx tailwint
 
 # Scan specific files
@@ -100,6 +100,8 @@ With `--fix`:
 | `.html` | html | Static HTML files |
 | `.vue` | html | Vue single-file components |
 | `.svelte` | html | Svelte components |
+| `.astro` | html | Astro components |
+| `.mdx` | mdx | MDX documents |
 | `.css` | css | `@apply` directives and Tailwind at-rules |
 
 ## Tailwind v4 support
@@ -135,7 +137,7 @@ const exitCode = await run({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,css}"]` | Glob patterns for files to scan |
+| `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"]` | Glob patterns for files to scan |
 | `fix` | `boolean` | `false` | Auto-fix issues using LSP code actions |
 | `cwd` | `string` | `process.cwd()` | Working directory for glob resolution and LSP root |
 

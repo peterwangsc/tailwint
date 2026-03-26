@@ -2,7 +2,7 @@
  * tailwint — Tailwind CSS linter powered by the official language server.
  *
  * Usage:  tailwint [--fix] [glob...]
- *         tailwint                              # default: **\/*.{tsx,jsx,html,vue,svelte}
+ *         tailwint                              # default: **\/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}
  *         tailwint --fix                        # auto-fix all issues
  *         tailwint "src/**\/*.tsx"               # custom glob
  *
@@ -63,7 +63,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   const fix = options.fix ?? false;
   const patterns = options.patterns ?? DEFAULT_PATTERNS;
 
-  const files: string[] = [];
+  const fileSet = new Set<string>();
   for (const pattern of patterns) {
     const matches = await glob(pattern, {
       cwd,
@@ -83,11 +83,16 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
         "**/storybook-static/**",
         "**/.next/**",
         "**/.nuxt/**",
+        "**/.output/**",
         "**/.svelte-kit/**",
+        "**/.astro/**",
+        "**/.vercel/**",
+        "**/.expo/**",
       ],
     });
-    files.push(...matches);
+    for (const m of matches) fileSet.add(m);
   }
+  const files = [...fileSet];
 
   await banner();
 
@@ -133,7 +138,12 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   const fileVersions = new Map<string, number>();
 
   for (const filePath of files) {
-    const content = readFileSync(filePath, "utf-8");
+    let content: string;
+    try {
+      content = readFileSync(filePath, "utf-8");
+    } catch {
+      continue; // file may have been deleted between glob and read
+    }
     fileContents.set(filePath, content);
     fileVersions.set(filePath, 1);
 
