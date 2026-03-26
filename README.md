@@ -1,13 +1,11 @@
-```ansi
-[36m    .              o8o  oooo                    o8o                  .[0m
-[36m  .o8              `"'  `888                    `"'                .o8[0m
-[34m.o888oo  .oooo.   oooo   888  oooo oooo    ooo oooo  ooo. .oo.   .o888oo[0m
-[34m  888   `P  )88b  `888   888   `88. `88.  .8'  `888  `888P"Y88b    888[0m
-[35m  888    .oP"888   888   888    `88..]88..8'    888   888   888    888[0m
-[35m  888 . d8(  888   888   888     `888'`888'     888   888   888    888 .[0m
-[95m  "888" `Y888""8o o888o o888o     `8'  `8'     o888o o888o o888o   "888"[0m
-
-[36m~[34m≈[35m∼[95m〜[36m~[34m≈[35m∼[95m〜[36m~[0m [2mtailwind css linter // powered by the official lsp[0m [36m~[34m≈[35m∼[95m〜[36m~[34m≈[35m∼[95m〜[36m~[0m
+```
+    .              o8o  oooo                    o8o                  .
+  .o8              `"'  `888                    `"'                .o8
+.o888oo  .oooo.   oooo   888  oooo oooo    ooo oooo  ooo. .oo.   .o888oo
+  888   `P  )88b  `888   888   `88. `88.  .8'  `888  `888P"Y88b    888
+  888    .oP"888   888   888    `88..]88..8'    888   888   888    888
+  888 . d8(  888   888   888     `888'`888'     888   888   888    888 .
+  "888" `Y888""8o o888o o888o     `8'  `8'     o888o o888o o888o   "888"
 ```
 
 [![npm](https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm)](https://www.npmjs.com/package/tailwint)
