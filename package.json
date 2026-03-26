@@ -1,6 +1,6 @@
 {
   "name": "tailwint",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Tailwind CSS linter for CI — drives the official language server to catch class issues and auto-fix them",
   "license": "MIT",
   "author": "Peter Wang",
