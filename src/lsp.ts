@@ -244,6 +244,9 @@ export function notify(method: string, params: object) {
 export async function shutdown() {
   await send("shutdown", {}).catch(() => {});
   notify("exit", {});
+  server.stdin!.end();
+  server.stdout!.destroy();
+  server.stderr!.destroy();
   server.kill();
 }
 

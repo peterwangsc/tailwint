@@ -69,6 +69,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
       cwd,
       absolute: true,
       nodir: true,
+      ignore: ["**/node_modules/**"],
     });
     files.push(...matches);
   }
