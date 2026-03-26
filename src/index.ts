@@ -48,7 +48,7 @@ import {
 // Re-export for tests
 export { applyEdits, type TextEdit } from "./edits.js";
 
-const DEFAULT_PATTERNS = ["**/*.{tsx,jsx,html,vue,svelte,css}"];
+const DEFAULT_PATTERNS = ["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"];
 
 export interface TailwintOptions {
   patterns?: string[];
@@ -69,7 +69,22 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
       cwd,
       absolute: true,
       nodir: true,
-      ignore: ["**/node_modules/**"],
+      ignore: [
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/build/**",
+        "**/out/**",
+        "**/coverage/**",
+        "**/public/**",
+        "**/tmp/**",
+        "**/.tmp/**",
+        "**/.cache/**",
+        "**/vendor/**",
+        "**/storybook-static/**",
+        "**/.next/**",
+        "**/.nuxt/**",
+        "**/.svelte-kit/**",
+      ],
     });
     files.push(...matches);
   }

@@ -256,7 +256,8 @@ export function fileUri(absPath: string): string {
 
 export function langId(filePath: string): string {
   if (filePath.endsWith(".css")) return "css";
-  if (filePath.endsWith(".html") || filePath.endsWith(".vue") || filePath.endsWith(".svelte")) return "html";
+  if (filePath.endsWith(".html") || filePath.endsWith(".vue") || filePath.endsWith(".svelte") || filePath.endsWith(".astro")) return "html";
+  if (filePath.endsWith(".mdx")) return "mdx";
   if (filePath.endsWith(".jsx")) return "javascriptreact";
   return "typescriptreact";
 }
