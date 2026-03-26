@@ -4,9 +4,56 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { resolve } from "path";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 
 const DEBUG = process.env.DEBUG === "1";
+
+let workspaceRoot = "";
+let vscodeSettings: Record<string, any> | null = null;
+
+/** Load .vscode/settings.json once, cache the result. */
+function loadVscodeSettings(): Record<string, any> {
+  if (vscodeSettings !== null) return vscodeSettings;
+  const settingsPath = resolve(workspaceRoot, ".vscode/settings.json");
+  if (!existsSync(settingsPath)) {
+    vscodeSettings = {};
+    return vscodeSettings;
+  }
+  try {
+    // Strip single-line comments (// ...) and trailing commas for JSON compat
+    const raw = readFileSync(settingsPath, "utf-8")
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/,\s*([\]}])/g, "$1");
+    vscodeSettings = JSON.parse(raw);
+  } catch {
+    vscodeSettings = {};
+  }
+  return vscodeSettings!;
+}
+
+/**
+ * Extract a section from flat VS Code settings into a nested object.
+ * e.g. section "tailwindCSS" turns { "tailwindCSS.lint.cssConflict": "error" }
+ * into { lint: { cssConflict: "error" } }
+ */
+function getSettingsSection(section: string): Record<string, any> {
+  const settings = loadVscodeSettings();
+  const prefix = section + ".";
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (!key.startsWith(prefix)) continue;
+    const path = key.slice(prefix.length).split(".");
+    let target = result;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (!(path[i] in target) || typeof target[path[i]] !== "object") {
+        target[path[i]] = {};
+      }
+      target = target[path[i]];
+    }
+    target[path[path.length - 1]] = value;
+  }
+  return result;
+}
 
 let server: ChildProcess;
 let serverDead = false;
@@ -41,6 +88,7 @@ export function resetState() {
   diagTarget = 0;
   diagTargetResolve = null;
   diagWaiters.clear();
+  vscodeSettings = null;
 }
 
 /** Returns a promise that resolves when @/tailwindCSS/projectInitialized fires. */
@@ -160,7 +208,9 @@ function processMessages() {
     if (msg.id != null && msg.method) {
       let result: any = null;
       if (msg.method === "workspace/configuration") {
-        result = (msg.params?.items || []).map(() => ({}));
+        result = (msg.params?.items || []).map((item: any) =>
+          item.section ? getSettingsSection(item.section) : {},
+        );
       }
       server.stdin!.write(encode({ jsonrpc: "2.0", id: msg.id, result }));
       continue;
@@ -236,6 +286,7 @@ function drainAll(reason: Error) {
 }
 
 export function startServer(root: string) {
+  workspaceRoot = root;
   const bin = findLanguageServer(root);
   server = spawn(bin, ["--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
 
