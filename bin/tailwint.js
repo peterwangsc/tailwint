@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 import { run } from "../dist/index.js";
+import { shutdown } from "../dist/lsp.js";
 import { c, isTTY } from "../dist/ui.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { resolve, dirname } from "path";
+
+function cleanup(signal) {
+  if (isTTY) process.stderr.write("\x1b[?25h\x1b[2K\r");
+  shutdown().finally(() => process.exit(signal === "SIGINT" ? 130 : 143));
+}
+process.on("SIGINT", () => cleanup("SIGINT"));
+process.on("SIGTERM", () => cleanup("SIGTERM"));
 
 const args = process.argv.slice(2);
 

@@ -9,6 +9,7 @@ import { existsSync } from "fs";
 const DEBUG = process.env.DEBUG === "1";
 
 let server: ChildProcess;
+let serverDead = false;
 let msgId = 0;
 
 const chunks: Buffer[] = [];
@@ -25,12 +26,12 @@ export let projectReady = false;
 let projectReadyResolve: (() => void) | null = null;
 let diagTarget = 0;
 let diagTargetResolve: (() => void) | null = null;
-
 const diagWaiters = new Map<string, (diags: any[]) => void>();
 
 /** Reset module state between runs (for programmatic multi-run usage). */
 export function resetState() {
   msgId = 0;
+  serverDead = false;
   chunks.length = 0;
   chunksLen = 0;
   pending.clear();
@@ -44,7 +45,7 @@ export function resetState() {
 
 /** Returns a promise that resolves when @/tailwindCSS/projectInitialized fires. */
 export function waitForProjectReady(timeoutMs = 15_000): Promise<void> {
-  if (projectReady) return Promise.resolve();
+  if (projectReady || serverDead) return Promise.resolve();
   return new Promise((res, rej) => {
     projectReadyResolve = res;
     const timer = setTimeout(() => {
@@ -59,7 +60,7 @@ export function waitForProjectReady(timeoutMs = 15_000): Promise<void> {
 
 /** Returns a promise that resolves when diagnosticsReceived.size >= count. */
 export function waitForDiagnosticCount(count: number, timeoutMs = 30_000): Promise<void> {
-  if (diagnosticsReceived.size >= count) return Promise.resolve();
+  if (diagnosticsReceived.size >= count || serverDead) return Promise.resolve();
   return new Promise((res) => {
     diagTarget = count;
     const timer = setTimeout(() => {
@@ -72,6 +73,7 @@ export function waitForDiagnosticCount(count: number, timeoutMs = 30_000): Promi
 
 /** Returns a promise that resolves when diagnostics are published for a specific URI. */
 export function waitForDiagnostic(uri: string, timeoutMs = 10_000): Promise<any[]> {
+  if (serverDead) return Promise.resolve([]);
   // Clear stale entry so we wait for the server to re-publish
   diagnosticsReceived.delete(uri);
   return new Promise((res) => {
@@ -183,6 +185,7 @@ function processMessages() {
         diagTargetResolve = null;
         resolve();
       }
+
     }
 
     // Tailwind project initialized
@@ -206,20 +209,51 @@ function findLanguageServer(cwd: string): string {
   return existsSync(local) ? local : "tailwindcss-language-server";
 }
 
+/** Reject all pending requests and resolve all waiters. Called when the server dies. */
+function drainAll(reason: Error) {
+  serverDead = true;
+  for (const [id, p] of pending) {
+    p.reject(reason);
+    pending.delete(id);
+  }
+  // Resolve project-ready waiter (so run() doesn't hang)
+  if (projectReadyResolve) {
+    const r = projectReadyResolve;
+    projectReadyResolve = null;
+    r();
+  }
+  // Resolve count-based waiter
+  if (diagTargetResolve) {
+    const r = diagTargetResolve;
+    diagTargetResolve = null;
+    r();
+  }
+  // Resolve all URI-specific waiters with empty arrays
+  for (const [uri, r] of diagWaiters) {
+    r([]);
+  }
+  diagWaiters.clear();
+}
+
 export function startServer(root: string) {
   const bin = findLanguageServer(root);
   server = spawn(bin, ["--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") {
-      // Print formatted error, then reject pending requests so run() exits cleanly
       console.error("\n  \x1b[38;5;203m\x1b[1mERROR\x1b[0m @tailwindcss/language-server not found.");
       console.error("  Install it: \x1b[1mnpm install -D @tailwindcss/language-server\x1b[0m\n");
-      const e = new Error("@tailwindcss/language-server not found");
-      for (const [id, p] of pending) {
-        p.reject(e);
-        pending.delete(id);
-      }
+    }
+    drainAll(new Error(err.code === "ENOENT"
+      ? "@tailwindcss/language-server not found"
+      : `language server error: ${err.message}`));
+  });
+
+  server.on("close", (code, signal) => {
+    if (!serverDead) {
+      drainAll(new Error(
+        signal ? `language server killed by ${signal}` : `language server exited with code ${code}`,
+      ));
     }
   });
 
@@ -235,23 +269,36 @@ export function startServer(root: string) {
 }
 
 export function send(method: string, params: object): Promise<any> {
+  if (serverDead) return Promise.reject(new Error("language server is not running"));
   const id = ++msgId;
   return new Promise((res, rej) => {
     pending.set(id, { resolve: res, reject: rej });
-    server.stdin!.write(encode({ jsonrpc: "2.0", id, method, params }));
+    try {
+      server.stdin!.write(encode({ jsonrpc: "2.0", id, method, params }));
+    } catch {
+      pending.delete(id);
+      rej(new Error("language server is not running"));
+    }
   });
 }
 
 export function notify(method: string, params: object) {
-  server.stdin!.write(encode({ jsonrpc: "2.0", method, params }));
+  if (serverDead) return;
+  try {
+    server.stdin!.write(encode({ jsonrpc: "2.0", method, params }));
+  } catch {
+    // Server pipe is dead — drainAll will handle cleanup via the close event
+  }
 }
 
 export async function shutdown() {
+  if (serverDead) return;
   await send("shutdown", {}).catch(() => {});
   notify("exit", {});
-  server.stdin!.end();
-  server.stdout!.destroy();
-  server.stderr!.destroy();
+  serverDead = true;
+  try { server.stdin!.end(); } catch {}
+  try { server.stdout!.destroy(); } catch {}
+  try { server.stderr!.destroy(); } catch {}
   server.kill();
 }
 
