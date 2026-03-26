@@ -1,12 +1,4 @@
-```
-    .              o8o  oooo                    o8o                  .
-  .o8              `"'  `888                    `"'                .o8
-.o888oo  .oooo.   oooo   888  oooo oooo    ooo oooo  ooo. .oo.   .o888oo
-  888   `P  )88b  `888   888   `88. `88.  .8'  `888  `888P"Y88b    888
-  888    .oP"888   888   888    `88..]88..8'    888   888   888    888
-  888 . d8(  888   888   888     `888'`888'     888   888   888    888 .
-  "888" `Y888""8o o888o o888o     `8'  `8'     o888o o888o o888o   "888"
-```
+![tailwint](assets/header.svg)
 
 [![npm](https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm)](https://www.npmjs.com/package/tailwint)
 [![license](https://img.shields.io/npm/l/tailwint?color=a78bfa)](https://github.com/peterwangsc/tailwint/blob/main/LICENSE)

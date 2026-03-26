@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="220" viewBox="0 0 820 220">
+  <rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+  <text font-family="'SF Mono','Fira Code','Fira Mono','Roboto Mono','Menlo','Monaco','Consolas',monospace" font-size="13.5" fill="#e6edf3">
+    <tspan x="24" y="32" fill="#56d4dd">    .              o8o  oooo                    o8o                  .</tspan>
+    <tspan x="24" y="50" fill="#56d4dd">  .o8              `"'  `888                    `"'                .o8</tspan>
+    <tspan x="24" y="68" fill="#61afef">.o888oo  .oooo.   oooo   888  oooo oooo    ooo oooo  ooo. .oo.   .o888oo</tspan>
+    <tspan x="24" y="86" fill="#61afef">  888   `P  )88b  `888   888   `88. `88.  .8'  `888  `888P"Y88b    888</tspan>
+    <tspan x="24" y="104" fill="#c678dd">  888    .oP"888   888   888    `88..]88..8'    888   888   888    888</tspan>
+    <tspan x="24" y="122" fill="#c678dd">  888 . d8(  888   888   888     `888'`888'     888   888   888    888 .</tspan>
+    <tspan x="24" y="140" fill="#e06c95">  "888" `Y888""8o o888o o888o     `8'  `8'     o888o o888o o888o   "888"</tspan>
+    <tspan x="24" y="176">
+      <tspan fill="#56d4dd">~</tspan><tspan fill="#61afef">&#x2248;</tspan><tspan fill="#c678dd">&#x223C;</tspan><tspan fill="#e06c95">&#x301C;</tspan><tspan fill="#56d4dd">~</tspan><tspan fill="#61afef">&#x2248;</tspan><tspan fill="#c678dd">&#x223C;</tspan><tspan fill="#e06c95">&#x301C;</tspan><tspan fill="#56d4dd">~</tspan><tspan fill="#6e7681"> tailwind css linter // powered by the official lsp </tspan><tspan fill="#56d4dd">~</tspan><tspan fill="#61afef">&#x2248;</tspan><tspan fill="#c678dd">&#x223C;</tspan><tspan fill="#e06c95">&#x301C;</tspan><tspan fill="#56d4dd">~</tspan><tspan fill="#61afef">&#x2248;</tspan><tspan fill="#c678dd">&#x223C;</tspan><tspan fill="#e06c95">&#x301C;</tspan><tspan fill="#56d4dd">~</tspan>
+    </tspan>
+  </text>
+</svg>
