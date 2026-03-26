@@ -1,6 +1,6 @@
 ```css
 ~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈  tailwint  ≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈
-   tailwind css linter /* powered by the official lsp */
+tailwind css linter /* powered by the official lsp */
 ```
 
 <p align="center">
