@@ -83,9 +83,7 @@ export async function fixFile(
   let ver = version.get(filePath)!;
   const issueCount = initialDiags.length;
   let diags = initialDiags;
-  const maxPasses = 10;
-
-  for (let pass = 0; pass < maxPasses && diags.length > 0; pass++) {
+  for (let pass = 0; diags.length > 0; pass++) {
     onPass?.(pass + 1);
     if (DEBUG) console.error(`    pass ${pass + 1}: ${diags.length} remaining`);
 

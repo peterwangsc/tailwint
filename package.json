@@ -1,6 +1,6 @@
 {
   "name": "tailwint",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Tailwind CSS linter for CI — drives the official language server to catch class issues and auto-fix them",
   "license": "MIT",
   "author": "Peter Wang",
@@ -18,6 +18,10 @@
     "lsp"
   ],
   "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "bin": {
     "tailwint": "./bin/tailwint.js"
   },

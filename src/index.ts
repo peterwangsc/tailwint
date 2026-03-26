@@ -23,6 +23,7 @@ import {
   diagnosticsReceived,
   waitForProjectReady,
   waitForDiagnosticCount,
+  resetState,
 } from "./lsp.js";
 import { fixFile } from "./edits.js";
 import {
@@ -56,6 +57,7 @@ export interface TailwintOptions {
 }
 
 export async function run(options: TailwintOptions = {}): Promise<number> {
+  resetState();
   const t0 = Date.now();
   const cwd = resolve(options.cwd || process.cwd());
   const fix = options.fix ?? false;
@@ -289,16 +291,23 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   return 1;
 }
 
-// CLI entry point
-const args = process.argv.slice(2);
-const fix = args.includes("--fix");
-const patterns = args.filter((a) => a !== "--fix");
+// CLI entry point — only runs when executed directly, not when imported
+const isCLI =
+  process.argv[1] != null &&
+  (import.meta.url === new URL(process.argv[1], "file:").href ||
+   process.argv[1].endsWith("/tailwint.js"));
 
-run({ fix, patterns: patterns.length > 0 ? patterns : undefined }).then(
-  (code) => process.exit(code),
-  (err) => {
-    console.error(`\n  ${c.red}${c.bold}tailwint crashed:${c.reset} ${err}`);
-    process.stderr.write(isTTY ? "\x1b[?25h" : "");
-    process.exit(2);
-  },
-);
+if (isCLI) {
+  const args = process.argv.slice(2);
+  const fix = args.includes("--fix");
+  const patterns = args.filter((a: string) => a !== "--fix");
+
+  run({ fix, patterns: patterns.length > 0 ? patterns : undefined }).then(
+    (code) => process.exit(code),
+    (err) => {
+      console.error(`\n  ${c.red}${c.bold}tailwint crashed:${c.reset} ${err}`);
+      process.stderr.write(isTTY ? "\x1b[?25h" : "");
+      process.exit(2);
+    },
+  );
+}

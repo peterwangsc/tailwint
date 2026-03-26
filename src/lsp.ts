@@ -28,6 +28,20 @@ let diagTargetResolve: (() => void) | null = null;
 
 const diagWaiters = new Map<string, (diags: any[]) => void>();
 
+/** Reset module state between runs (for programmatic multi-run usage). */
+export function resetState() {
+  msgId = 0;
+  chunks.length = 0;
+  chunksLen = 0;
+  pending.clear();
+  diagnosticsReceived.clear();
+  projectReady = false;
+  projectReadyResolve = null;
+  diagTarget = 0;
+  diagTargetResolve = null;
+  diagWaiters.clear();
+}
+
 /** Returns a promise that resolves when @/tailwindCSS/projectInitialized fires. */
 export function waitForProjectReady(timeoutMs = 15_000): Promise<void> {
   if (projectReady) return Promise.resolve();
@@ -48,11 +62,11 @@ export function waitForDiagnosticCount(count: number, timeoutMs = 30_000): Promi
   if (diagnosticsReceived.size >= count) return Promise.resolve();
   return new Promise((res) => {
     diagTarget = count;
-    diagTargetResolve = res;
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       diagTargetResolve = null;
       res();
     }, timeoutMs);
+    diagTargetResolve = () => { clearTimeout(timer); res(); };
   });
 }
 
