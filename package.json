@@ -6,7 +6,7 @@
   "author": "Peter Wang",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/peterwang/tailwint.git"
+    "url": "git+https://github.com/peterwangsc/tailwint.git"
   },
   "keywords": [
     "tailwindcss",
@@ -27,17 +27,19 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "tsx --test src/*.test.ts",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "glob": "^11.0.0"
+    "glob": "^13.0.6"
   },
   "peerDependencies": {
     "@tailwindcss/language-server": ">=0.14.0"
   },
   "devDependencies": {
     "@tailwindcss/language-server": "^0.14.29",
-    "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   }
 }
