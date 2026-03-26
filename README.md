@@ -1,11 +1,7 @@
-<p align="center">
-
 ```css
-  ~≈∼〜~≈∼〜~≈  tailwint  ∼〜~≈∼〜~≈∼~
-     tailwind css linter // powered by the official lsp
+~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈  tailwint  ≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈
+   tailwind css linter /* powered by the official lsp */
 ```
-
-</p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/tailwint"><img src="https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm" alt="npm version"></a>
