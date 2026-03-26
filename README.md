@@ -1,4 +1,6 @@
-![tailwint](assets/header.svg)
+<p align="center">
+  <img src="assets/header.svg" alt="tailwint">
+</p>
 
 [![npm](https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm)](https://www.npmjs.com/package/tailwint)
 [![license](https://img.shields.io/npm/l/tailwint?color=a78bfa)](https://github.com/peterwangsc/tailwint/blob/main/LICENSE)
