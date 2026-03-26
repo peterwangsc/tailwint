@@ -2,9 +2,11 @@
   <img src="assets/header.svg" alt="tailwint">
 </p>
 
-[![npm](https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm)](https://www.npmjs.com/package/tailwint)
-[![license](https://img.shields.io/npm/l/tailwint?color=a78bfa)](https://github.com/peterwangsc/tailwint/blob/main/LICENSE)
-[![downloads](https://img.shields.io/npm/dm/tailwint?color=f472b6)](https://www.npmjs.com/package/tailwint)
+<p align="center">
+  <a href="https://www.npmjs.com/package/tailwint"><img src="https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm" alt="npm version"></a>
+  <a href="https://github.com/peterwangsc/tailwint/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/tailwint?color=a78bfa" alt="license"></a>
+  <a href="https://www.npmjs.com/package/tailwint"><img src="https://img.shields.io/npm/dm/tailwint?color=f472b6" alt="downloads"></a>
+</p>
 
 ---
 
