@@ -212,10 +212,12 @@ export function startServer(root: string) {
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") {
-      // Reject all pending requests so run() can surface the error
-      const msg = "@tailwindcss/language-server not found. Install it: npm install -D @tailwindcss/language-server";
+      // Print formatted error, then reject pending requests so run() exits cleanly
+      console.error("\n  \x1b[38;5;203m\x1b[1mERROR\x1b[0m @tailwindcss/language-server not found.");
+      console.error("  Install it: \x1b[1mnpm install -D @tailwindcss/language-server\x1b[0m\n");
+      const e = new Error("@tailwindcss/language-server not found");
       for (const [id, p] of pending) {
-        p.reject(new Error(msg));
+        p.reject(e);
         pending.delete(id);
       }
     }
