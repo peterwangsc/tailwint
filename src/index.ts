@@ -21,12 +21,14 @@ import {
   fileUri,
   langId,
   diagnosticsReceived,
-  projectReady,
-  waitForProjectReady,
-  waitForDiagnosticsSettled,
+  settledProjects,
+  brokenProjects,
+  warnings,
+  waitForAllProjects,
   resetState,
 } from "./lsp.js";
 import { fixFile } from "./edits.js";
+import { prescanCssFiles } from "./prescan.js";
 import {
   c,
   isTTY,
@@ -134,12 +136,15 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     `  ${c.green}\u2714${c.reset} ${c.dim}language server ready${c.reset} ${windTrail(30)}`,
   );
 
+  // Pre-scan CSS files to predict project count
+  const prescan = prescanCssFiles(files);
+
   // Open found files — triggers the server's project discovery
   const fileContents = new Map<string, string>();
   const fileVersions = new Map<string, number>();
   const found = files.length;
 
-  const foundText = `sending ${found} matched files`;
+  const foundText = `sent ${found} file${found === 1 ? "" : "s"} to lsp`;
   const foundPad = 54 - 2 - foundText.length - 1;
   console.error(
     `  ${c.green}\u2714${c.reset} ${c.dim}${foundText}${c.reset} ${windTrail(foundPad)}`,
@@ -165,12 +170,13 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     });
   }
 
-  // Wait for project init + diagnostics (server may not respond for every file)
+  // Wait for all projects to be resolved (settled or broken)
   setTitle("tailwint ~ scanning...");
   const stopScan = startSpinner(() => {
     const received = diagnosticsReceived.size;
+    const resolved = settledProjects + brokenProjects;
     const label = received > 0 ? "scanning" : "initializing";
-    setTitle(`tailwint ~ ${label} ${received}/${found}`);
+    setTitle(`tailwint ~ ${label} ${resolved}/${prescan.maxProjects}`);
     const pct = found > 0 ? Math.round((received / found) * 100) : 0;
     const bar = progressBar(pct, 18, true);
     const totalStr = String(found);
@@ -178,9 +184,14 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     return `  ${braille()} ${bar} ${c.dim}${label}${dots()}${c.reset} ${c.bold}${recvStr}${c.reset}${c.dim}/${totalStr} scanned${c.reset} ${windTrail(12, tick)}`;
   }, 80);
 
-  await waitForProjectReady();
-  if (projectReady) await waitForDiagnosticsSettled();
+  await waitForAllProjects(prescan.predictedRoots, prescan.maxProjects);
   stopScan();
+
+  // Log warnings for broken projects
+  for (const w of warnings) {
+    console.error(`  ${c.yellow}\u26A0${c.reset} ${c.dim}${w}${c.reset}`);
+  }
+
   const scanned = diagnosticsReceived.size;
   const scannedText = `${scanned}/${found} files received`;
   const scannedPad = 54 - 2 - scannedText.length - 1;

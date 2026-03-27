@@ -67,15 +67,28 @@ export const diagnosticsReceived = new Map<string, any[]>();
 export let projectReady = false;
 
 // ---------------------------------------------------------------------------
-// Event-driven waiters — resolved by processMessages, no polling
+// Project-aware wait state
 // ---------------------------------------------------------------------------
 
-let projectReadyResolve: (() => void) | null = null;
-let diagSettledResolve: (() => void) | null = null;
+/** Tracking for projectInitialized events */
+export let projectInitCount = 0;
+export let settledProjects = 0;
+export let brokenProjects = 0;
+let lastInitMs = 0;
+let inBrokenSequence = false;
+let awaitingFirstDiag = false;
+let currentProjectDiagCount = 0;
+export const warnings: string[] = [];
+
+/** Internal waiter state */
+let projectWaitResolve: (() => void) | null = null;
 let diagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-let diagDebounceMs = 500;
-let diagOuterTimer: ReturnType<typeof setTimeout> | null = null;
+let projectInitTimer: ReturnType<typeof setTimeout> | null = null;
+let outerTimer: ReturnType<typeof setTimeout> | null = null;
 const diagWaiters = new Map<string, (diags: any[]) => void>();
+
+/** Config for the current wait */
+let waitConfig = { predictedRoots: 0, maxProjects: 0, initTimeoutMs: 5000, debounceMs: 500 };
 
 /** Reset module state between runs (for programmatic multi-run usage). */
 export function resetState() {
@@ -86,46 +99,157 @@ export function resetState() {
   pending.clear();
   diagnosticsReceived.clear();
   projectReady = false;
-  projectReadyResolve = null;
-  diagSettledResolve = null;
+  projectInitCount = 0;
+  settledProjects = 0;
+  brokenProjects = 0;
+  lastInitMs = 0;
+  inBrokenSequence = false;
+  awaitingFirstDiag = false;
+  currentProjectDiagCount = 0;
+  warnings.length = 0;
+  projectWaitResolve = null;
   if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-  if (diagOuterTimer) { clearTimeout(diagOuterTimer); diagOuterTimer = null; }
+  if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
+  if (outerTimer) { clearTimeout(outerTimer); outerTimer = null; }
   diagWaiters.clear();
   vscodeSettings = null;
 }
 
-/** Returns a promise that resolves when @/tailwindCSS/projectInitialized fires. */
-export function waitForProjectReady(timeoutMs = 5_000): Promise<void> {
-  if (projectReady || serverDead) return Promise.resolve();
-  return new Promise((res, rej) => {
-    projectReadyResolve = res;
-    const timer = setTimeout(() => {
-      projectReadyResolve = null;
-      res(); // resolve anyway — don't block forever
-    }, timeoutMs);
-    // Clean up timer if resolved early
-    const origRes = res;
-    projectReadyResolve = () => { clearTimeout(timer); origRes(); };
-  });
+function cleanupWaitTimers() {
+  if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
+  if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
+  if (outerTimer) { clearTimeout(outerTimer); outerTimer = null; }
+}
+
+function finishWait() {
+  if (!projectWaitResolve) return;
+  const resolve = projectWaitResolve;
+  projectWaitResolve = null;
+  cleanupWaitTimers();
+  resolve();
+}
+
+function isAllResolved(): boolean {
+  const resolved = settledProjects + brokenProjects;
+  return resolved >= waitConfig.maxProjects;
+}
+
+function startProjectInitTimeout() {
+  if (projectInitTimer) clearTimeout(projectInitTimer);
+  projectInitTimer = setTimeout(() => {
+    // Timer fired — either no project init came, or we were waiting for
+    // more diagnostics after a single early one. If we got any diagnostics
+    // for the current project, settle it before finishing.
+    if (currentProjectDiagCount > 0 && !awaitingFirstDiag) {
+      settleCurrentProject();
+    } else {
+      finishWait();
+    }
+  }, waitConfig.initTimeoutMs);
+}
+
+function onProjectInitialized() {
+  projectInitCount++;
+  const now = Date.now();
+  projectReady = true;
+
+  if (lastInitMs > 0 && (now - lastInitMs) < 500) {
+    // Rapid re-init — broken project
+    if (!inBrokenSequence) {
+      // First rapid init after a healthy one — the previous healthy init was actually broken
+      inBrokenSequence = true;
+      brokenProjects++;
+      warnings.push(
+        "A CSS file failed to initialize (likely an @apply referencing an unknown utility). " +
+        "That project's files will not receive diagnostics. " +
+        "See https://github.com/tailwindlabs/tailwindcss-intellisense/issues/1121",
+      );
+      // The previous init was counted as starting a healthy project's diagnostic wait.
+      // Cancel that wait — this project won't produce diagnostics.
+      if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
+    }
+    // Additional rapid inits for the same broken project — just update timestamp
+  } else {
+    // Healthy init — new project starting
+    inBrokenSequence = false;
+    awaitingFirstDiag = true;
+    currentProjectDiagCount = 0;
+    // Cancel any pending project-init timeout since we just got a new one
+    if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
+    if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
+    // Don't start the diagnostic debounce yet — wait for the first diagnostic to arrive.
+    // Use the init timeout as the safety net (if no diagnostics arrive at all,
+    // this project is effectively broken even though it didn't rapid-fire).
+    startProjectInitTimeout();
+  }
+
+  lastInitMs = now;
+
+  // Check if broken projects pushed us to completion
+  if (isAllResolved()) {
+    finishWait();
+  }
+}
+
+function settleCurrentProject() {
+  settledProjects++;
+  if (isAllResolved()) {
+    finishWait();
+  } else {
+    startProjectInitTimeout();
+  }
+}
+
+function startDiagDebounce() {
+  if (diagDebounceTimer) clearTimeout(diagDebounceTimer);
+  // Cancel the init timeout — we're now in diagnostic-settling mode
+  if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
+  diagDebounceTimer = setTimeout(settleCurrentProject, waitConfig.debounceMs);
+}
+
+function onDiagnosticReceived() {
+  if (!projectWaitResolve) return;
+  currentProjectDiagCount++;
+
+  if (awaitingFirstDiag) {
+    // First diagnostic after a healthy init — don't start the debounce yet.
+    // The first diagnostic is often just the CSS entry point, followed by a
+    // ~1s pause before the bulk TSX diagnostics arrive. Starting the debounce
+    // here would settle too early on large projects.
+    awaitingFirstDiag = false;
+  } else if (currentProjectDiagCount >= 2) {
+    // Second diagnostic and beyond — the bulk is flowing, debounce is safe
+    startDiagDebounce();
+  }
 }
 
 /**
- * Returns a promise that resolves when diagnostics have "settled" —
- * i.e., no new diagnostic has arrived for `debounceMs` after the first one,
- * or the outer timeout fires (whichever comes first).
+ * Wait for all expected projects to be resolved (settled or broken).
+ *
+ * @param predictedRoots - Number of CSS files predicted to be project roots
+ * @param maxProjects - Upper bound (predictedRoots + predictedNonRoots)
+ * @param initTimeoutMs - How long to wait for each projectInitialized event
+ * @param debounceMs - Silence window to consider diagnostics "settled"
  */
-export function waitForDiagnosticsSettled(timeoutMs = 10_000, debounceMs = 500): Promise<void> {
-  if (serverDead) return Promise.resolve();
-  diagDebounceMs = debounceMs;
+export function waitForAllProjects(
+  predictedRoots: number,
+  maxProjects: number,
+  initTimeoutMs = 5_000,
+  debounceMs = 500,
+): Promise<void> {
+  if (serverDead || maxProjects === 0) return Promise.resolve();
+
+  waitConfig = { predictedRoots, maxProjects, initTimeoutMs, debounceMs };
+
   return new Promise((res) => {
-    const finish = () => {
-      diagSettledResolve = null;
-      if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-      if (diagOuterTimer) { clearTimeout(diagOuterTimer); diagOuterTimer = null; }
-      res();
-    };
-    diagSettledResolve = finish;
-    diagOuterTimer = setTimeout(finish, timeoutMs);
+    projectWaitResolve = res;
+
+    // Start waiting for first project init
+    startProjectInitTimeout();
+
+    // Hard outer timeout — never wait longer than this
+    const outerMs = initTimeoutMs + (maxProjects * 3000) + 5000;
+    outerTimer = setTimeout(finishWait, Math.min(outerMs, 30_000));
   });
 }
 
@@ -239,24 +363,13 @@ function processMessages() {
         resolve(diags);
       }
 
-      // Reset debounce timer — resolve after silence window
-      if (diagSettledResolve) {
-        if (diagDebounceTimer) clearTimeout(diagDebounceTimer);
-        diagDebounceTimer = setTimeout(() => {
-          if (diagSettledResolve) diagSettledResolve();
-        }, diagDebounceMs);
-      }
-
+      // Notify the project-aware wait system
+      onDiagnosticReceived();
     }
 
     // Tailwind project initialized
     if (msg.method === "@/tailwindCSS/projectInitialized") {
-      projectReady = true;
-      if (projectReadyResolve) {
-        const resolve = projectReadyResolve;
-        projectReadyResolve = null;
-        resolve();
-      }
+      onProjectInitialized();
     }
   }
 }
@@ -277,20 +390,8 @@ function drainAll(reason: Error) {
     p.reject(reason);
     pending.delete(id);
   }
-  // Resolve project-ready waiter (so run() doesn't hang)
-  if (projectReadyResolve) {
-    const r = projectReadyResolve;
-    projectReadyResolve = null;
-    r();
-  }
-  // Resolve settled waiter
-  if (diagSettledResolve) {
-    const r = diagSettledResolve;
-    diagSettledResolve = null;
-    if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-    if (diagOuterTimer) { clearTimeout(diagOuterTimer); diagOuterTimer = null; }
-    r();
-  }
+  // Resolve project wait (so run() doesn't hang)
+  finishWait();
   // Resolve all URI-specific waiters with empty arrays
   for (const [uri, r] of diagWaiters) {
     r([]);
