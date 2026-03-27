@@ -21,6 +21,7 @@ import {
   fileUri,
   langId,
   diagnosticsReceived,
+  projectReady,
   waitForProjectReady,
   waitForDiagnosticsSettled,
   resetState,
@@ -133,9 +134,16 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     `  ${c.green}\u2714${c.reset} ${c.dim}language server ready${c.reset} ${windTrail(30)}`,
   );
 
-  // Open files — triggers the server's project discovery
+  // Open found files — triggers the server's project discovery
   const fileContents = new Map<string, string>();
   const fileVersions = new Map<string, number>();
+  const found = files.length;
+
+  const foundText = `sending ${found} matched files`;
+  const foundPad = 54 - 2 - foundText.length - 1;
+  console.error(
+    `  ${c.green}\u2714${c.reset} ${c.dim}${foundText}${c.reset} ${windTrail(foundPad)}`,
+  );
 
   for (const filePath of files) {
     let content: string;
@@ -157,30 +165,27 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     });
   }
 
-  // Wait for project init + diagnostics — event-driven, no polling
-  setTitle("tailwint ~ initializing...");
-  const stopAnalyze = startSpinner(() => {
+  // Wait for project init + diagnostics (server may not respond for every file)
+  setTitle("tailwint ~ scanning...");
+  const stopScan = startSpinner(() => {
     const received = diagnosticsReceived.size;
-    const label = received > 0 ? "analyzing" : "initializing";
-    setTitle(`tailwint ~ ${label} ${received}/${files.length}`);
-    const pct = Math.round((received / files.length) * 100);
+    const label = received > 0 ? "scanning" : "initializing";
+    setTitle(`tailwint ~ ${label} ${received}/${found}`);
+    const pct = found > 0 ? Math.round((received / found) * 100) : 0;
     const bar = progressBar(pct, 18, true);
-    const totalStr = String(files.length);
+    const totalStr = String(found);
     const recvStr = String(received).padStart(totalStr.length);
-    const countText = `${recvStr}/${totalStr}`;
-    const usedCols =
-      2 + 1 + 1 + 20 + 1 + label.length + 3 + 1 + countText.length + 1;
-    const waveCols = Math.max(0, 56 - usedCols);
-    return `  ${braille()} ${bar} ${c.dim}${label}${dots()}${c.reset} ${c.bold}${recvStr}${c.reset}${c.dim}/${totalStr}${c.reset} ${windTrail(waveCols, tick)}`;
+    return `  ${braille()} ${bar} ${c.dim}${label}${dots()}${c.reset} ${c.bold}${recvStr}${c.reset}${c.dim}/${totalStr} scanned${c.reset} ${windTrail(12, tick)}`;
   }, 80);
 
   await waitForProjectReady();
-  await waitForDiagnosticsSettled();
-  stopAnalyze();
-  const analyzedText = `${files.length} files analyzed`;
-  const analyzePad = 54 - 2 - analyzedText.length - 1;
+  if (projectReady) await waitForDiagnosticsSettled();
+  stopScan();
+  const scanned = diagnosticsReceived.size;
+  const scannedText = `${scanned}/${found} files received`;
+  const scannedPad = 54 - 2 - scannedText.length - 1;
   console.error(
-    `  ${c.green}\u2714${c.reset} ${c.dim}${analyzedText}${c.reset} ${windTrail(analyzePad)}`,
+    `  ${c.green}\u2714${c.reset} ${c.dim}${scannedText}${c.reset} ${windTrail(scannedPad)}`,
   );
   console.error("");
 
@@ -210,7 +215,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     setTitle("tailwint \u2714 all clear");
     await celebrationAnimation();
     console.error(
-      `  ${c.green}\u2714${c.reset} ${c.bold}${files.length}${c.reset} files scanned ${c.dim}// ${rainbowText("all clear")} ${c.dim}${elapsed}s${c.reset}`,
+      `  ${c.green}\u2714${c.reset} ${c.bold}${scanned}${c.reset} files scanned ${c.dim}// ${rainbowText("all clear")} ${c.dim}${elapsed}s${c.reset}`,
     );
     console.error("");
     await shutdown();
@@ -219,7 +224,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
 
   // Summary
   console.error(
-    `  ${c.bold}${c.white}${files.length}${c.reset} files scanned ${c.dim}//${c.reset} ${c.orange}${c.bold}${conflicts}${c.reset}${c.orange} conflicts${c.reset} ${c.dim}\u2502${c.reset} ${c.yellow}${c.bold}${canonical}${c.reset}${c.yellow} canonical${c.reset}`,
+    `  ${c.bold}${c.white}${scanned}${c.reset} files scanned ${c.dim}//${c.reset} ${c.orange}${c.bold}${conflicts}${c.reset}${c.orange} conflicts${c.reset} ${c.dim}\u2502${c.reset} ${c.yellow}${c.bold}${canonical}${c.reset}${c.yellow} canonical${c.reset}`,
   );
   console.error("");
 

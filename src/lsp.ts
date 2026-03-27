@@ -95,7 +95,7 @@ export function resetState() {
 }
 
 /** Returns a promise that resolves when @/tailwindCSS/projectInitialized fires. */
-export function waitForProjectReady(timeoutMs = 15_000): Promise<void> {
+export function waitForProjectReady(timeoutMs = 5_000): Promise<void> {
   if (projectReady || serverDead) return Promise.resolve();
   return new Promise((res, rej) => {
     projectReadyResolve = res;
