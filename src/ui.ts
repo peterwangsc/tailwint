@@ -166,6 +166,7 @@ export async function banner() {
   }
 
   console.error(`  ${windTrail(WIND_SIDE)} ${c.bold}${c.cyan}tailwint${c.reset} ${windTrail(WIND_SIDE, 6)}`);
+  console.error("");
   console.error(`    ${c.dim}tailwind css linter ${c.gray}// powered by the official lsp${c.reset}`);
   console.error("");
 }
