@@ -43,8 +43,8 @@ if (args.includes("--version") || args.includes("-v")) {
   process.exit(0);
 }
 
-const fix = args.includes("--fix");
-const patterns = args.filter((a) => a !== "--fix");
+const fix = args.includes("--fix") || args.includes("-f");
+const patterns = args.filter((a) => a !== "--fix" && a !== "-f");
 
 run({ fix, patterns: patterns.length > 0 ? patterns : undefined }).then(
   (code) => process.exit(code),

@@ -100,7 +100,20 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   await banner();
 
   if (files.length === 0) {
-    console.log(`  ${c.dim}No files matched.${c.reset}`);
+    const VP = 54;
+    const l1 = "the wind blows";
+    const l2 = "but there is nothing here";
+    const l3 = "~ no files matched ~";
+    const p1 = 4;
+    const p2 = Math.floor((VP - l2.length - 2) / 2);
+    const p3 = VP - l3.length - 8;
+    const lw1 = p1, rw1 = VP - p1 - l1.length - 2;
+    const lw2 = p2, rw2 = VP - p2 - l2.length - 2;
+    const lw3 = p3, rw3 = VP - p3 - l3.length - 2;
+    console.error(`  ${windTrail(lw1)} ${c.dim}${l1}${c.reset} ${windTrail(rw1, 4)}`);
+    console.error(`  ${windTrail(lw2, 2)} ${c.dim}${l2}${c.reset} ${windTrail(rw2, 7)}`);
+    console.error(`  ${windTrail(lw3, 5)} ${c.dim}${c.italic}${l3}${c.reset} ${windTrail(rw3, 9)}`);
+    console.error("");
     return 0;
   }
 
