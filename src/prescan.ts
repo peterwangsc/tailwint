@@ -71,12 +71,15 @@ export interface PrescanResult {
   predictedUnrelated: number;
   /** Upper bound on projects the server might create */
   maxProjects: number;
+  /** Paths of CSS files with no Tailwind signals — safe to skip sending */
+  unrelatedCssFiles: Set<string>;
 }
 
 export function prescanCssFiles(files: string[]): PrescanResult {
   let predictedRoots = 0;
   let predictedNonRoots = 0;
   let predictedUnrelated = 0;
+  const unrelatedCssFiles = new Set<string>();
 
   for (const filePath of files) {
     if (!filePath.endsWith(".css")) continue;
@@ -91,6 +94,7 @@ export function prescanCssFiles(files: string[]): PrescanResult {
     const result = analyzeStylesheet(content);
     if (result.versions.length === 0) {
       predictedUnrelated++;
+      unrelatedCssFiles.add(filePath);
     } else if (result.root) {
       predictedRoots++;
     } else {
@@ -103,6 +107,7 @@ export function prescanCssFiles(files: string[]): PrescanResult {
     totalCssFiles,
     predictedRoots,
     predictedNonRoots,
+    unrelatedCssFiles,
     predictedUnrelated,
     maxProjects: predictedRoots + predictedNonRoots,
   };

@@ -102,13 +102,23 @@ export function dots(): string {
 export function startSpinner(render: () => string, intervalMs = 100): () => void {
   if (!isTTY) return () => {};
   process.stderr.write(c.hide);
+  let lastLines = 1;
   const id = setInterval(() => {
     tick++;
-    process.stderr.write(`${c.clear}${render()}`);
+    const output = render();
+    const lines = output.split("\n").length;
+    // Move up and clear previous lines
+    let clear = "\x1b[2K\r";
+    for (let i = 1; i < lastLines; i++) clear = `\x1b[A\x1b[2K` + clear;
+    process.stderr.write(`${clear}${output}`);
+    lastLines = lines;
   }, intervalMs);
   return () => {
     clearInterval(id);
-    process.stderr.write(`${c.clear}${c.show}`);
+    // Move cursor to the first line of the spinner
+    for (let i = 1; i < lastLines; i++) process.stderr.write("\x1b[A");
+    // Clear from cursor to end of screen (clears all spinner lines)
+    process.stderr.write(`\x1b[2K\x1b[J\r${c.show}`);
   };
 }
 

@@ -460,7 +460,7 @@ export async function shutdown() {
   if (serverDead) return;
   await Promise.race([
     send("shutdown", {}).catch(() => {}),
-    new Promise(r => setTimeout(r, 3000)),
+    new Promise(r => setTimeout(r, 500)),
   ]);
   notify("exit", {});
   serverDead = true;

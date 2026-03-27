@@ -143,14 +143,13 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   const fileContents = new Map<string, string>();
   const fileVersions = new Map<string, number>();
   const found = files.length;
+  const skipped = prescan.unrelatedCssFiles.size;
 
-  const foundText = `sent ${found} file${found === 1 ? "" : "s"} to lsp`;
-  const foundPad = 54 - 2 - foundText.length - 1;
-  console.error(
-    `  ${c.green}\u2714${c.reset} ${c.dim}${foundText}${c.reset} ${windTrail(foundPad)}`,
-  );
-
+  let sent = 0;
   for (const filePath of files) {
+    // Skip CSS files with no Tailwind signals — sending them wastes server CPU
+    if (prescan.unrelatedCssFiles.has(filePath)) continue;
+
     let content: string;
     try {
       content = readFileSync(filePath, "utf-8");
@@ -168,6 +167,25 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
         text: content,
       },
     });
+    sent++;
+  }
+
+  const sentText = `sent ${sent} file${sent === 1 ? "" : "s"} to lsp`;
+  const sentPad = 54 - 2 - sentText.length - 1;
+  console.error(
+    `  ${c.green}\u2714${c.reset} ${c.dim}${sentText}${c.reset} ${windTrail(sentPad)}`,
+  );
+
+  if (skipped > 0) {
+    const skipText = `${skipped} file${skipped === 1 ? "" : "s"} skipped`;
+    const skipPad = 54 - 2 - skipText.length - 1;
+    console.error(
+      `  ${c.dim}\u2500${c.reset} ${c.dim}${skipText}${c.reset} ${windTrail(skipPad)}`,
+    );
+    for (const f of prescan.unrelatedCssFiles) {
+      const rel = relative(cwd, f);
+      console.error(`    ${c.dim}${fileBadge(rel)}${c.reset}`);
+    }
   }
 
   // Wait for all projects to be resolved (settled or broken)
@@ -177,11 +195,20 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     const resolved = settledProjects + brokenProjects;
     const label = received > 0 ? "scanning" : "initializing";
     setTitle(`tailwint ~ ${label} ${resolved}/${prescan.maxProjects}`);
-    const pct = found > 0 ? Math.round((received / found) * 100) : 0;
+    const pct = sent > 0 ? Math.round((received / sent) * 100) : 0;
     const bar = progressBar(pct, 18, true);
-    const totalStr = String(found);
+    const totalStr = String(sent);
     const recvStr = String(received).padStart(totalStr.length);
-    return `  ${braille()} ${bar} ${c.dim}${label}${dots()}${c.reset} ${c.bold}${recvStr}${c.reset}${c.dim}/${totalStr} scanned${c.reset} ${windTrail(12, tick)}`;
+    const usedCols = 2 + 1 + 1 + 20 + 1 + label.length + 3 + 1 - 2;
+    const waveCols = Math.max(0, 54 - usedCols);
+    // labelCol = 2(indent) + 1(braille) + 1(space) + 20(bar) + 1(space) = 25
+    // "received" starts at labelCol, numbers right-aligned before it
+    const countStr = `${recvStr}/${totalStr}`;
+    const countPad = " ".repeat(Math.max(0, 25 - countStr.length - 1));
+    const recvLabel = "files received";
+    const recvUsed = countPad.length + countStr.length + 1 + recvLabel.length + 1 - 2;
+    const recvWave = Math.max(0, 54 - recvUsed);
+    return `  ${braille()} ${bar} ${c.dim}${label}${dots()}${c.reset} ${windTrail(waveCols, tick)}\n${countPad}${c.bold}${countStr}${c.reset} ${c.dim}${recvLabel}${c.reset} ${windTrail(recvWave, tick + 3)}`;
   }, 80);
 
   await waitForAllProjects(prescan.predictedRoots, prescan.maxProjects);
@@ -193,7 +220,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   }
 
   const scanned = diagnosticsReceived.size;
-  const scannedText = `${scanned}/${found} files received`;
+  const scannedText = `${scanned}/${sent} files received`;
   const scannedPad = 54 - 2 - scannedText.length - 1;
   console.error(
     `  ${c.green}\u2714${c.reset} ${c.dim}${scannedText}${c.reset} ${windTrail(scannedPad)}`,
@@ -332,4 +359,3 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   await shutdown();
   return 1;
 }
-
