@@ -71,8 +71,10 @@ export let projectReady = false;
 // ---------------------------------------------------------------------------
 
 let projectReadyResolve: (() => void) | null = null;
-let diagTarget = 0;
-let diagTargetResolve: (() => void) | null = null;
+let diagSettledResolve: (() => void) | null = null;
+let diagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let diagDebounceMs = 500;
+let diagOuterTimer: ReturnType<typeof setTimeout> | null = null;
 const diagWaiters = new Map<string, (diags: any[]) => void>();
 
 /** Reset module state between runs (for programmatic multi-run usage). */
@@ -85,8 +87,9 @@ export function resetState() {
   diagnosticsReceived.clear();
   projectReady = false;
   projectReadyResolve = null;
-  diagTarget = 0;
-  diagTargetResolve = null;
+  diagSettledResolve = null;
+  if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
+  if (diagOuterTimer) { clearTimeout(diagOuterTimer); diagOuterTimer = null; }
   diagWaiters.clear();
   vscodeSettings = null;
 }
@@ -106,16 +109,23 @@ export function waitForProjectReady(timeoutMs = 15_000): Promise<void> {
   });
 }
 
-/** Returns a promise that resolves when diagnosticsReceived.size >= count. */
-export function waitForDiagnosticCount(count: number, timeoutMs = 30_000): Promise<void> {
-  if (diagnosticsReceived.size >= count || serverDead) return Promise.resolve();
+/**
+ * Returns a promise that resolves when diagnostics have "settled" —
+ * i.e., no new diagnostic has arrived for `debounceMs` after the first one,
+ * or the outer timeout fires (whichever comes first).
+ */
+export function waitForDiagnosticsSettled(timeoutMs = 10_000, debounceMs = 500): Promise<void> {
+  if (serverDead) return Promise.resolve();
+  diagDebounceMs = debounceMs;
   return new Promise((res) => {
-    diagTarget = count;
-    const timer = setTimeout(() => {
-      diagTargetResolve = null;
+    const finish = () => {
+      diagSettledResolve = null;
+      if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
+      if (diagOuterTimer) { clearTimeout(diagOuterTimer); diagOuterTimer = null; }
       res();
-    }, timeoutMs);
-    diagTargetResolve = () => { clearTimeout(timer); res(); };
+    };
+    diagSettledResolve = finish;
+    diagOuterTimer = setTimeout(finish, timeoutMs);
   });
 }
 
@@ -229,11 +239,12 @@ function processMessages() {
         resolve(diags);
       }
 
-      // Resolve count-based waiter
-      if (diagTargetResolve && diagnosticsReceived.size >= diagTarget) {
-        const resolve = diagTargetResolve;
-        diagTargetResolve = null;
-        resolve();
+      // Reset debounce timer — resolve after silence window
+      if (diagSettledResolve) {
+        if (diagDebounceTimer) clearTimeout(diagDebounceTimer);
+        diagDebounceTimer = setTimeout(() => {
+          if (diagSettledResolve) diagSettledResolve();
+        }, diagDebounceMs);
       }
 
     }
@@ -272,10 +283,12 @@ function drainAll(reason: Error) {
     projectReadyResolve = null;
     r();
   }
-  // Resolve count-based waiter
-  if (diagTargetResolve) {
-    const r = diagTargetResolve;
-    diagTargetResolve = null;
+  // Resolve settled waiter
+  if (diagSettledResolve) {
+    const r = diagSettledResolve;
+    diagSettledResolve = null;
+    if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
+    if (diagOuterTimer) { clearTimeout(diagOuterTimer); diagOuterTimer = null; }
     r();
   }
   // Resolve all URI-specific waiters with empty arrays
@@ -344,7 +357,10 @@ export function notify(method: string, params: object) {
 
 export async function shutdown() {
   if (serverDead) return;
-  await send("shutdown", {}).catch(() => {});
+  await Promise.race([
+    send("shutdown", {}).catch(() => {}),
+    new Promise(r => setTimeout(r, 3000)),
+  ]);
   notify("exit", {});
   serverDead = true;
   try { server.stdin!.end(); } catch {}

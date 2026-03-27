@@ -22,7 +22,7 @@ import {
   langId,
   diagnosticsReceived,
   waitForProjectReady,
-  waitForDiagnosticCount,
+  waitForDiagnosticsSettled,
   resetState,
 } from "./lsp.js";
 import { fixFile } from "./edits.js";
@@ -175,7 +175,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   }, 80);
 
   await waitForProjectReady();
-  await waitForDiagnosticCount(files.length);
+  await waitForDiagnosticsSettled();
   stopAnalyze();
   const analyzedText = `${files.length} files analyzed`;
   const analyzePad = 54 - 2 - analyzedText.length - 1;
