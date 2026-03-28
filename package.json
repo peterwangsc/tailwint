@@ -45,8 +45,8 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc",
-    "test": "tsx --test src/*.test.ts",
+    "build": "rm -rf dist && tsc",
+    "test": "tsx --test tests/*.test.ts",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {

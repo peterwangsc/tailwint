@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
-import { applyEdits, type TextEdit } from "./edits.js";
+import { applyEdits, type TextEdit } from "../src/edits.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
