@@ -66,13 +66,18 @@ function filterContainedEdits(edits: TextEdit[]): TextEdit[] {
   return result;
 }
 
+export interface FixResult {
+  initial: number;
+  remaining: number;
+}
+
 export async function fixFile(
   filePath: string,
   initialDiags: any[],
   fileContents: Map<string, string>,
   version: Map<string, number>,
   onPass?: (pass: number) => void,
-): Promise<number> {
+): Promise<FixResult> {
   const DEBUG = process.env.DEBUG === "1";
   const uri = fileUri(filePath);
   let content = fileContents.get(filePath)!;
@@ -135,5 +140,5 @@ export async function fixFile(
     version.set(filePath, ver);
   }
 
-  return issueCount;
+  return { initial: issueCount, remaining: diags.length };
 }

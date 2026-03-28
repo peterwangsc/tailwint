@@ -303,6 +303,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     console.error("");
 
     let totalFixed = 0;
+    let totalSkipped = 0;
     let fileIdx = 0;
     for (const [filePath, diags] of issuesByFile) {
       fileIdx++;
@@ -326,7 +327,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
         return `  ${braille()} ${bar} ${c.bold}${c.white}${shortName}${c.reset} ${c.dim}${passText}${dots()}${c.reset} ${windTrail(fixWave, tick)}`;
       });
 
-      const fixed = await fixFile(
+      const result = await fixFile(
         filePath,
         diags,
         fileContents,
@@ -337,24 +338,32 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
       );
       stopFix();
 
+      const fixed = result.initial - result.remaining;
       totalFixed += fixed;
+      totalSkipped += result.remaining;
 
       const pct = Math.round((fileIdx / issuesByFile.size) * 100);
       const bar = progressBar(pct, 18);
+      const skipNote = result.remaining > 0
+        ? ` ${c.dim}(${result.remaining} skipped)${c.reset}`
+        : "";
       console.error(
-        `  ${c.green}\u2714${c.reset} ${bar} ${c.bold}${c.white}${shortName}${c.reset} ${c.green}${diags.length} fixed${c.reset}`,
+        `  ${c.green}\u2714${c.reset} ${bar} ${c.bold}${c.white}${shortName}${c.reset} ${c.green}${fixed} fixed${c.reset}${skipNote}`,
       );
     }
     console.error("");
     const fixElapsed = ((Date.now() - t0) / 1000).toFixed(1);
     setTitle(`tailwint \u2714 fixed ${totalFixed} issues`);
     await celebrationAnimation();
+    const skipSummary = totalSkipped > 0
+      ? ` ${c.dim}(${totalSkipped} unfixable)${c.reset}`
+      : "";
     console.error(
-      `  ${windWave()} ${c.bgGreen}${c.bold} \u2714 FIXED ${c.reset} ${c.green}${c.bold}${totalFixed}${c.reset} of ${c.bold}${totalIssues}${c.reset} issues across ${c.bold}${issuesByFile.size}${c.reset} files ${c.dim}${fixElapsed}s${c.reset} ${windWave()}`,
+      `  ${windWave()} ${c.bgGreen}${c.bold} \u2714 FIXED ${c.reset} ${c.green}${c.bold}${totalFixed}${c.reset} of ${c.bold}${totalIssues}${c.reset} issues across ${c.bold}${issuesByFile.size}${c.reset} files ${c.dim}${fixElapsed}s${c.reset}${skipSummary} ${windWave()}`,
     );
     console.error("");
     await shutdown();
-    return 0;
+    return totalSkipped > 0 ? 1 : 0;
   }
 
   // Fail
