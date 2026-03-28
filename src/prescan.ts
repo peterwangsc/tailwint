@@ -102,9 +102,8 @@ export function prescanCssFiles(files: string[]): PrescanResult {
     }
   }
 
-  const totalCssFiles = predictedRoots + predictedNonRoots + predictedUnrelated;
   return {
-    totalCssFiles,
+    totalCssFiles: predictedRoots + predictedNonRoots + predictedUnrelated,
     predictedRoots,
     predictedNonRoots,
     unrelatedCssFiles,

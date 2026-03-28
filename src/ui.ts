@@ -211,8 +211,9 @@ export async function celebrationAnimation() {
 // ---------------------------------------------------------------------------
 
 export function fileBadge(rel: string): string {
-  const dir = rel.includes("/") ? `${c.dim}${rel.slice(0, rel.lastIndexOf("/") + 1)}${c.reset}` : "";
-  const name = rel.includes("/") ? rel.slice(rel.lastIndexOf("/") + 1) : rel;
+  const sep = rel.lastIndexOf("/");
+  const dir = sep >= 0 ? `${c.dim}${rel.slice(0, sep + 1)}${c.reset}` : "";
+  const name = sep >= 0 ? rel.slice(sep + 1) : rel;
   return `${dir}${c.bold}${c.white}${name}${c.reset}`;
 }
 

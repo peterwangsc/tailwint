@@ -155,7 +155,6 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   // Open found files — triggers the server's project discovery
   const fileContents = new Map<string, string>();
   const fileVersions = new Map<string, number>();
-  const found = files.length;
   const skipped = prescan.unrelatedCssFiles.size;
 
   let sent = 0;

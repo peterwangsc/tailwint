@@ -386,16 +386,10 @@ function findLanguageServer(cwd: string): string {
 /** Reject all pending requests and resolve all waiters. Called when the server dies. */
 function drainAll(reason: Error) {
   serverDead = true;
-  for (const [id, p] of pending) {
-    p.reject(reason);
-    pending.delete(id);
-  }
-  // Resolve project wait (so run() doesn't hang)
+  for (const p of pending.values()) p.reject(reason);
+  pending.clear();
   finishWait();
-  // Resolve all URI-specific waiters with empty arrays
-  for (const [uri, r] of diagWaiters) {
-    r([]);
-  }
+  for (const r of diagWaiters.values()) r([]);
   diagWaiters.clear();
 }
 

@@ -66,10 +66,6 @@ function filterContainedEdits(edits: TextEdit[]): TextEdit[] {
   return result;
 }
 
-async function waitForFreshDiagnostics(uri: string): Promise<any[]> {
-  return waitForDiagnostic(uri);
-}
-
 export async function fixFile(
   filePath: string,
   initialDiags: any[],
@@ -128,7 +124,7 @@ export async function fixFile(
       contentChanges: [{ text: content }],
     });
 
-    diags = (await waitForFreshDiagnostics(uri)).filter(
+    diags = (await waitForDiagnostic(uri)).filter(
       (d: any) => d.severity === 1 || d.severity === 2,
     );
   }
