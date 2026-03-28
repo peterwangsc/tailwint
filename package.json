@@ -1,6 +1,6 @@
 {
   "name": "tailwint",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Tailwind CSS linter for CI — drives the official language server to catch class issues and auto-fix them",
   "license": "MIT",
   "author": "Peter Wang",
@@ -45,7 +45,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "rm -rf dist && tsc",
+    "build": "rm -rf dist && esbuild src/index.ts src/edits.ts src/lsp.ts src/prescan.ts src/ui.ts --outdir=dist --format=esm --platform=node --target=node18 --minify && tsc --emitDeclarationOnly",
     "test": "tsx --test tests/*.test.ts",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -58,6 +58,7 @@
   "devDependencies": {
     "@tailwindcss/language-server": "^0.14.29",
     "@types/node": "^25.5.0",
+    "esbuild": "^0.27.4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }
