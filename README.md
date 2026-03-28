@@ -156,11 +156,11 @@ const exitCode = await run({
 
 tailwint exits with meaningful codes for CI pipelines:
 
-| Exit code | Meaning                                           |
-| --------- | ------------------------------------------------- |
-| `0`       | No issues found, or all issues fixed with `--fix` |
-| `1`       | Issues found (without `--fix`)                    |
-| `2`       | Fatal error (language server not found, crash)    |
+| Exit code | Meaning                                                          |
+| --------- | ---------------------------------------------------------------- |
+| `0`       | No issues found, or all issues fixed with `--fix`                |
+| `1`       | Issues found, or unfixable issues remain after `--fix`           |
+| `2`       | Fatal error (language server not found, crash)                   |
 
 ### GitHub Actions
 
