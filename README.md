@@ -50,6 +50,7 @@ npx tailwint "src/**/*.tsx"
 
 # Auto-fix all issues
 npx tailwint --fix
+npx tailwint -f
 
 # Fix specific files
 npx tailwint --fix "app/**/*.tsx"
@@ -61,11 +62,13 @@ DEBUG=1 npx tailwint
 ## Example output
 
 ```
-  ~≈∼〜~≈∼〜~≈ tailwint ∼〜~≈∼〜~≈∼~
+  ~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈~ tailwint ~∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼~
+
     tailwind css linter // powered by the official lsp
 
-  ✔ language server ready ~≈∼〜~≈∼〜~≈∼〜
-  ✔ 42 files analyzed ~≈∼〜~≈∼〜~≈∼〜~≈
+  ✔ language server ready ~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼〜~
+  ✔ sent 42 files to lsp ~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼〜~~
+  ✔ 42/42 files received ~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼〜~≈∼〜~~
 
   42 files scanned // 8 conflicts │ 12 canonical
 
@@ -93,16 +96,16 @@ With `--fix`:
 
 ## Supported file types
 
-| Extension | Language ID | Notes |
-|-----------|-----------|-------|
-| `.tsx` | typescriptreact | React / Next.js components |
-| `.jsx` | javascriptreact | React components |
-| `.html` | html | Static HTML files |
-| `.vue` | html | Vue single-file components |
-| `.svelte` | html | Svelte components |
-| `.astro` | html | Astro components |
-| `.mdx` | mdx | MDX documents |
-| `.css` | css | `@apply` directives and Tailwind at-rules |
+| Extension | Language ID     | Notes                                     |
+| --------- | --------------- | ----------------------------------------- |
+| `.tsx`    | typescriptreact | React / Next.js components                |
+| `.jsx`    | javascriptreact | React components                          |
+| `.html`   | html            | Static HTML files                         |
+| `.vue`    | html            | Vue single-file components                |
+| `.svelte` | html            | Svelte components                         |
+| `.astro`  | html            | Astro components                          |
+| `.mdx`    | mdx             | MDX documents                             |
+| `.css`    | css             | `@apply` directives and Tailwind at-rules |
 
 ## Tailwind v4 support
 
@@ -135,29 +138,29 @@ const exitCode = await run({
 
 ### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"]` | Glob patterns for files to scan |
-| `fix` | `boolean` | `false` | Auto-fix issues using LSP code actions |
-| `cwd` | `string` | `process.cwd()` | Working directory for glob resolution and LSP root |
+| Option     | Type       | Default                                            | Description                                        |
+| ---------- | ---------- | -------------------------------------------------- | -------------------------------------------------- |
+| `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"]` | Glob patterns for files to scan                    |
+| `fix`      | `boolean`  | `false`                                            | Auto-fix issues using LSP code actions             |
+| `cwd`      | `string`   | `process.cwd()`                                    | Working directory for glob resolution and LSP root |
 
 ### Exports
 
-| Export | Description |
-|--------|-------------|
-| `run(options?)` | Run the linter, returns exit code |
-| `applyEdits(content, edits)` | Apply LSP text edits to a string |
-| `TextEdit` | TypeScript type for LSP text edits |
+| Export                       | Description                        |
+| ---------------------------- | ---------------------------------- |
+| `run(options?)`              | Run the linter, returns exit code  |
+| `applyEdits(content, edits)` | Apply LSP text edits to a string   |
+| `TextEdit`                   | TypeScript type for LSP text edits |
 
 ## CI integration
 
 tailwint exits with meaningful codes for CI pipelines:
 
-| Exit code | Meaning |
-|-----------|---------|
-| `0` | No issues found, or all issues fixed with `--fix` |
-| `1` | Issues found (without `--fix`) |
-| `2` | Fatal error (language server not found, crash) |
+| Exit code | Meaning                                           |
+| --------- | ------------------------------------------------- |
+| `0`       | No issues found, or all issues fixed with `--fix` |
+| `1`       | Issues found (without `--fix`)                    |
+| `2`       | Fatal error (language server not found, crash)    |
 
 ### GitHub Actions
 
@@ -175,10 +178,11 @@ npx tailwint --fix && git add -u
 ## How it works
 
 1. **Boot** — spawns `@tailwindcss/language-server` over stdio
-2. **Open** — sends all matched files to the server via `textDocument/didOpen`
-3. **Analyze** — waits for `textDocument/publishDiagnostics` notifications (event-driven, no polling)
-4. **Report** — collects diagnostics, categorizes as conflicts or canonical
-5. **Fix** *(if `--fix`)* — requests `textDocument/codeAction` quickfixes and applies edits in a loop until no diagnostics remain
+2. **Pre-scan** — classifies CSS files to predict how many Tailwind projects the server will create, skips unrelated CSS files
+3. **Open** — sends matched files to the server via `textDocument/didOpen`
+4. **Analyze** — waits for `textDocument/publishDiagnostics` notifications (event-driven, project-aware — tracks each project's initialization and diagnostics separately)
+5. **Report** — collects diagnostics, categorizes as conflicts or canonical
+6. **Fix** _(if `--fix`)_ — requests `textDocument/codeAction` quickfixes and applies edits in a loop until no diagnostics remain
 
 The fix loop is unbounded — it keeps applying edits until the file stabilizes. A single pass may not resolve everything (e.g., fixing a conflict can reveal a canonical issue underneath), so the loop continues as long as edits produce changes.
 
