@@ -1,6 +1,6 @@
 {
   "name": "tailwint",
-  "version": "1.1.10",
+  "version": "1.1.11",
   "description": "Tiny Tailwind CSS linter and auto-fixer for CI — powered by the official language server, not regex",
   "license": "MIT",
   "author": "Peter Wang",
