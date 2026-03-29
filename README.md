@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <strong>tail</strong>wind + l<strong>int</strong> = <strong>tailwint</strong> ~≈∼〜 a tiny linter for your Tailwind CSS
+</p>
+
+<p align="center">
   <a href="https://www.npmjs.com/package/tailwint"><img src="https://img.shields.io/npm/v/tailwint?color=0ea5e9&label=npm" alt="npm version"></a>
   <a href="https://github.com/peterwangsc/tailwint/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/tailwint?color=a78bfa" alt="license"></a>
   <a href="https://www.npmjs.com/package/tailwint"><img src="https://img.shields.io/npm/dm/tailwint?color=f472b6" alt="downloads"></a>
@@ -10,7 +14,7 @@
 
 ---
 
-The same diagnostics VS Code shows — but from the command line. Catches class conflicts, suggests canonical rewrites, and auto-fixes everything. Built on the official `@tailwindcss/language-server`.
+The same diagnostics VS Code shows — but from the command line. Catches class conflicts, suggests canonical rewrites, and auto-fixes everything. Powered by the official `@tailwindcss/language-server` — not a custom parser, not a regex hack.
 
 **Works with Tailwind CSS v4.**
 

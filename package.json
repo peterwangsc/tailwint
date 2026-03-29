@@ -1,7 +1,7 @@
 {
   "name": "tailwint",
   "version": "1.1.10",
-  "description": "Tailwind CSS linter for CI — drives the official language server to catch class issues and auto-fix them",
+  "description": "Tiny Tailwind CSS linter and auto-fixer for CI — powered by the official language server, not regex",
   "license": "MIT",
   "author": "Peter Wang",
   "homepage": "https://github.com/peterwangsc/tailwint",
@@ -13,16 +13,24 @@
   "keywords": [
     "tailwindcss",
     "tailwind",
+    "tailwind-lint",
     "lint",
     "linter",
+    "cli",
     "ci",
+    "ci-cd",
     "autofix",
     "language-server",
     "lsp",
     "tailwind-v4",
     "css",
     "diagnostics",
-    "code-quality"
+    "code-quality",
+    "class-conflicts",
+    "canonical",
+    "github-actions",
+    "pre-commit",
+    "static-analysis"
   ],
   "engines": {
     "node": ">=18"
