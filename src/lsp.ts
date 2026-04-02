@@ -76,7 +76,7 @@ export let settledProjects = 0;
 export let brokenProjects = 0;
 let lastInitMs = 0;
 let inBrokenSequence = false;
-let awaitingFirstDiag = false;
+
 let currentProjectDiagCount = 0;
 export const warnings: string[] = [];
 
@@ -104,10 +104,12 @@ export function resetState() {
   brokenProjects = 0;
   lastInitMs = 0;
   inBrokenSequence = false;
-  awaitingFirstDiag = false;
+
   currentProjectDiagCount = 0;
   warnings.length = 0;
   projectWaitResolve = null;
+  bulkFlowStarted = false;
+  lastDiagReceivedMs = 0;
   if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
   if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
   if (outerTimer) { clearTimeout(outerTimer); outerTimer = null; }
@@ -137,10 +139,13 @@ function isAllResolved(): boolean {
 function startProjectInitTimeout() {
   if (projectInitTimer) clearTimeout(projectInitTimer);
   projectInitTimer = setTimeout(() => {
-    // Timer fired — either no project init came, or we were waiting for
-    // more diagnostics after a single early one. If we got any diagnostics
-    // for the current project, settle it before finishing.
-    if (currentProjectDiagCount > 0 && !awaitingFirstDiag) {
+    if (currentProjectDiagCount > 0 && !bulkFlowStarted) {
+      // Diagnostics are arriving but the gap detector never triggered
+      // (e.g. no burst pause on this machine). Force bulk mode and let
+      // the debounce take over instead of giving up.
+      bulkFlowStarted = true;
+      startDiagDebounce();
+    } else if (currentProjectDiagCount > 0) {
       settleCurrentProject();
     } else {
       finishWait();
@@ -172,7 +177,7 @@ function onProjectInitialized() {
   } else {
     // Healthy init — new project starting
     inBrokenSequence = false;
-    awaitingFirstDiag = true;
+
     currentProjectDiagCount = 0;
     // Cancel any pending project-init timeout since we just got a new one
     if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
@@ -207,18 +212,29 @@ function startDiagDebounce() {
   diagDebounceTimer = setTimeout(settleCurrentProject, waitConfig.debounceMs);
 }
 
+let bulkFlowStarted = false;
+let lastDiagReceivedMs = 0;
+
 function onDiagnosticReceived() {
   if (!projectWaitResolve) return;
   currentProjectDiagCount++;
 
-  if (awaitingFirstDiag) {
-    // First diagnostic after a healthy init — don't start the debounce yet.
-    // The first diagnostic is often just the CSS entry point, followed by a
-    // ~1s pause before the bulk TSX diagnostics arrive. Starting the debounce
-    // here would settle too early on large projects.
-    awaitingFirstDiag = false;
-  } else if (currentProjectDiagCount >= 2) {
-    // Second diagnostic and beyond — the bulk is flowing, debounce is safe
+  const now = Date.now();
+  const gap = lastDiagReceivedMs > 0 ? now - lastDiagReceivedMs : 0;
+  lastDiagReceivedMs = now;
+
+  if (!bulkFlowStarted) {
+    // The LSP sends a small burst of trivial diagnostics (0-5ms gaps),
+    // then pauses ~1s while it resolves the Tailwind project config,
+    // then streams the real bulk (gaps under ~150ms). Only start the
+    // debounce once we see a gap large enough to indicate the burst
+    // has ended and the bulk flow has begun.
+    if (gap >= 100) {
+      bulkFlowStarted = true;
+    }
+  }
+
+  if (bulkFlowStarted) {
     startDiagDebounce();
   }
 }
