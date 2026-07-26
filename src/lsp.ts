@@ -4,6 +4,7 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { resolve } from "path";
+import { pathToFileURL } from "url";
 import { existsSync, readFileSync } from "fs";
 
 const DEBUG = process.env.DEBUG === "1";
@@ -368,7 +369,7 @@ function processMessages() {
 
     // Published diagnostics
     if (msg.method === "textDocument/publishDiagnostics" && msg.params) {
-      const uri = msg.params.uri;
+      const uri = normUri(msg.params.uri);
       const diags = msg.params.diagnostics || [];
       diagnosticsReceived.set(uri, diags);
 
@@ -394,9 +395,9 @@ function processMessages() {
 // Server lifecycle
 // ---------------------------------------------------------------------------
 
-function findLanguageServer(cwd: string): string {
-  const local = resolve(cwd, "node_modules/.bin/tailwindcss-language-server");
-  return existsSync(local) ? local : "tailwindcss-language-server";
+function findLanguageServer(cwd: string): string[] {
+  const js = resolve(cwd, "node_modules/@tailwindcss/language-server/bin/tailwindcss-language-server");
+  return existsSync(js) ? [process.execPath, js] : ["tailwindcss-language-server"];
 }
 
 /** Reject all pending requests and resolve all waiters. Called when the server dies. */
@@ -411,8 +412,8 @@ function drainAll(reason: Error) {
 
 export function startServer(root: string) {
   workspaceRoot = root;
-  const bin = findLanguageServer(root);
-  server = spawn(bin, ["--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+  const [bin, ...args] = findLanguageServer(root);
+  server = spawn(bin, [...args, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") {
@@ -481,7 +482,12 @@ export async function shutdown() {
 }
 
 export function fileUri(absPath: string): string {
-  return `file://${absPath}`;
+  return normUri(pathToFileURL(absPath).href);
+}
+
+/** Decoded, lowercase-drive canonical form so our URIs and the server's compare equal on Windows. */
+export function normUri(uri: string): string {
+  return decodeURIComponent(uri).replace(/^file:\/\/\/(\w):/, (_, d) => `file:///${d.toLowerCase()}:`);
 }
 
 export function langId(filePath: string): string {
