@@ -225,12 +225,18 @@ function onDiagnosticReceived() {
   lastDiagReceivedMs = now;
 
   if (!bulkFlowStarted) {
-    // The LSP sends a small burst of trivial diagnostics (0-5ms gaps),
-    // then pauses ~1s while it resolves the Tailwind project config,
-    // then streams the real bulk (gaps under ~150ms). Only start the
-    // debounce once we see a gap large enough to indicate the burst
-    // has ended and the bulk flow has begun.
-    if (gap >= 100) {
+    // The LSP sends a small burst of trivial diagnostics, then pauses while it
+    // resolves the Tailwind project config, then streams the real bulk.
+    // Settling inside that pause would pass files it had not checked yet, so
+    // the debounce may not start until the pause is over.
+    //
+    // projectInitialized IS the end of that pause — ask the server rather than
+    // inferring it from arrival gaps. The gap test stays as a fallback for a
+    // server that streams before announcing init, but it must not be the only
+    // trigger: a project whose diagnostics arrive as one uninterrupted stream
+    // never produces a gap, so the debounce never started and the run sat on
+    // the 5s init timeout instead. That was 4.8s of idle on a 571-file tree.
+    if (projectReady || gap >= 100) {
       bulkFlowStarted = true;
     }
   }
