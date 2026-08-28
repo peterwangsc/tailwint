@@ -21,10 +21,8 @@ import {
   fileUri,
   langId,
   diagnosticsReceived,
-  settledProjects,
-  brokenProjects,
   warnings,
-  waitForAllProjects,
+  waitForAllFiles,
   resetState,
 } from "./lsp.js";
 import { fixFile } from "./edits.js";
@@ -155,6 +153,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   // Open found files — triggers the server's project discovery
   const fileContents = new Map<string, string>();
   const fileVersions = new Map<string, number>();
+  const sentUris = new Set<string>();
   const skipped = prescan.unrelatedCssFiles.size;
 
   let sent = 0;
@@ -171,14 +170,16 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     fileContents.set(filePath, content);
     fileVersions.set(filePath, 1);
 
+    const uri = fileUri(filePath);
     notify("textDocument/didOpen", {
       textDocument: {
-        uri: fileUri(filePath),
+        uri,
         languageId: langId(filePath),
         version: 1,
         text: content,
       },
     });
+    sentUris.add(uri);
     sent++;
   }
 
@@ -200,13 +201,14 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     }
   }
 
-  // Wait for all projects to be resolved (settled or broken)
+  // Wait for diagnostics from every file sent to the language server
   setTitle("tailwint ~ scanning...");
   const stopScan = startSpinner(() => {
-    const received = diagnosticsReceived.size;
-    const resolved = settledProjects + brokenProjects;
+    const received = [...sentUris].filter((uri) =>
+      diagnosticsReceived.has(uri),
+    ).length;
     const label = received > 0 ? "scanning" : "initializing";
-    setTitle(`tailwint ~ ${label} ${resolved}/${prescan.maxProjects}`);
+    setTitle(`tailwint ~ ${label} ${received}/${sent}`);
     const pct = sent > 0 ? Math.round((received / sent) * 100) : 0;
     const bar = progressBar(pct, 18, true);
     const totalStr = String(sent);
@@ -223,15 +225,20 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     return `  ${braille()} ${bar} ${c.dim}${label}${dots()}${c.reset} ${windTrail(waveCols, tick)}\n${countPad}${c.bold}${countStr}${c.reset} ${c.dim}${recvLabel}${c.reset} ${windTrail(recvWave, tick + 3)}`;
   }, 80);
 
-  await waitForAllProjects(prescan.predictedRoots, prescan.maxProjects);
-  stopScan();
+  try {
+    await waitForAllFiles(sentUris);
+  } finally {
+    stopScan();
+  }
 
   // Log warnings for broken projects
   for (const w of warnings) {
     console.error(`  ${c.yellow}\u26A0${c.reset} ${c.dim}${w}${c.reset}`);
   }
 
-  const scanned = diagnosticsReceived.size;
+  const scanned = [...sentUris].filter((uri) =>
+    diagnosticsReceived.has(uri),
+  ).length;
   const scannedText = `${scanned}/${sent} files received`;
   const scannedPad = 54 - 2 - scannedText.length - 1;
   console.error(
