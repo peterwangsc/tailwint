@@ -55,7 +55,8 @@
     "clean": "rm -rf dist",
     "build": "rm -rf dist && esbuild src/index.ts src/edits.ts src/lsp.ts src/prescan.ts src/ui.ts --outdir=dist --format=esm --platform=node --target=node18 --minify && tsc --emitDeclarationOnly",
     "test": "tsx --test tests/*.test.ts",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "glob": "^13.0.6"
