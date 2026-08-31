@@ -245,50 +245,49 @@ function processMessages() {
       continue;
     }
 
-    if (DEBUG) console.error(`<- ${msg.method || `response#${msg.id}`}`);
+    processMessage(msg);
+  }
+}
 
-    // Response to our request
-    if (msg.id != null && !msg.method && pending.has(msg.id)) {
-      const p = pending.get(msg.id)!;
-      pending.delete(msg.id);
-      if (msg.error) p.reject(msg.error);
-      else p.resolve(msg.result);
-      continue;
+function processMessage(msg: any) {
+  if (DEBUG) console.error(`<- ${msg.method || `response#${msg.id}`}`);
+
+  if (msg.id != null && !msg.method && pending.has(msg.id)) {
+    const p = pending.get(msg.id)!;
+    pending.delete(msg.id);
+    if (msg.error) p.reject(msg.error);
+    else p.resolve(msg.result);
+    return;
+  }
+
+  if (msg.id != null && msg.method) {
+    let result: any = null;
+    if (msg.method === "workspace/configuration") {
+      result = (msg.params?.items || []).map((item: any) =>
+        item.section ? getSettingsSection(item.section) : {},
+      );
+    }
+    writeMessage({ jsonrpc: "2.0", id: msg.id, result });
+    return;
+  }
+
+  if (msg.method === "textDocument/publishDiagnostics" && msg.params) {
+    const uri = normUri(msg.params.uri);
+    const diags = msg.params.diagnostics || [];
+    diagnosticsReceived.set(uri, diags);
+    expectedDiagnosticUris.delete(uri);
+
+    if (diagWaiters.has(uri)) {
+      const resolve = diagWaiters.get(uri)!;
+      diagWaiters.delete(uri);
+      resolve(diags);
     }
 
-    // Server-initiated requests — must respond
-    if (msg.id != null && msg.method) {
-      let result: any = null;
-      if (msg.method === "workspace/configuration") {
-        result = (msg.params?.items || []).map((item: any) =>
-          item.section ? getSettingsSection(item.section) : {},
-        );
-      }
-      server.stdin!.write(encode({ jsonrpc: "2.0", id: msg.id, result }));
-      continue;
-    }
+    finishWait();
+  }
 
-    // Published diagnostics
-    if (msg.method === "textDocument/publishDiagnostics" && msg.params) {
-      const uri = normUri(msg.params.uri);
-      const diags = msg.params.diagnostics || [];
-      diagnosticsReceived.set(uri, diags);
-      expectedDiagnosticUris.delete(uri);
-
-      // Resolve URI-specific waiter
-      if (diagWaiters.has(uri)) {
-        const resolve = diagWaiters.get(uri)!;
-        diagWaiters.delete(uri);
-        resolve(diags);
-      }
-
-      finishWait();
-    }
-
-    // Tailwind project initialized
-    if (msg.method === "@/tailwindCSS/projectInitialized") {
-      onProjectInitialized();
-    }
+  if (msg.method === "@/tailwindCSS/projectInitialized") {
+    onProjectInitialized();
   }
 }
 
@@ -296,9 +295,9 @@ function processMessages() {
 // Server lifecycle
 // ---------------------------------------------------------------------------
 
-function findLanguageServer(cwd: string): string[] {
+function findLanguageServer(cwd: string): [string, boolean] {
   const js = resolve(cwd, "node_modules/@tailwindcss/language-server/bin/tailwindcss-language-server");
-  return existsSync(js) ? [process.execPath, js] : ["tailwindcss-language-server"];
+  return existsSync(js) ? [js, true] : ["tailwindcss-language-server", false];
 }
 
 /** Reject all pending requests and resolve all waiters. Called when the server dies. */
@@ -313,8 +312,12 @@ function drainAll(reason: Error) {
 
 export function startServer(root: string) {
   workspaceRoot = root;
-  const [bin, ...args] = findLanguageServer(root);
-  server = spawn(bin, [...args, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+  const [bin, ipc] = findLanguageServer(root);
+  server = ipc
+    ? spawn(process.execPath, [bin, "--node-ipc"], {
+        stdio: ["ignore", "ignore", "pipe", "ipc"],
+      })
+    : spawn(bin, ["--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") {
@@ -334,15 +337,28 @@ export function startServer(root: string) {
     }
   });
 
-  server.stdout!.on("data", (chunk: Buffer) => {
-    chunks.push(chunk);
-    chunksLen += chunk.length;
-    processMessages();
-  });
+  if (ipc) {
+    server.on("message", processMessage);
+  } else {
+    server.stdout!.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+      chunksLen += chunk.length;
+      processMessages();
+    });
+  }
 
-  server.stderr!.on("data", (chunk: Buffer) => {
+  server.stderr?.on("data", (chunk: Buffer) => {
     if (DEBUG) process.stderr.write(chunk);
   });
+}
+
+function writeMessage(message: object) {
+  if (server.connected) {
+    server.send(message);
+    return;
+  }
+
+  server.stdin!.write(encode(message));
 }
 
 export function send(method: string, params: object): Promise<any> {
@@ -351,7 +367,7 @@ export function send(method: string, params: object): Promise<any> {
   return new Promise((res, rej) => {
     pending.set(id, { resolve: res, reject: rej });
     try {
-      server.stdin!.write(encode({ jsonrpc: "2.0", id, method, params }));
+      writeMessage({ jsonrpc: "2.0", id, method, params });
     } catch {
       pending.delete(id);
       rej(new Error("language server is not running"));
@@ -362,7 +378,7 @@ export function send(method: string, params: object): Promise<any> {
 export function notify(method: string, params: object) {
   if (serverDead) return;
   try {
-    server.stdin!.write(encode({ jsonrpc: "2.0", method, params }));
+    writeMessage({ jsonrpc: "2.0", method, params });
   } catch {
     // Server pipe is dead — drainAll will handle cleanup via the close event
   }
@@ -376,9 +392,10 @@ export async function shutdown() {
   ]);
   notify("exit", {});
   serverDead = true;
+  try { server.disconnect(); } catch {}
   try { server.stdin!.end(); } catch {}
-  try { server.stdout!.destroy(); } catch {}
-  try { server.stderr!.destroy(); } catch {}
+  try { server.stdout?.destroy(); } catch {}
+  try { server.stderr?.destroy(); } catch {}
   server.kill();
 }
 
