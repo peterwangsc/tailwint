@@ -3,7 +3,17 @@
 Releases are published manually from a validated local package. CI tests pushes
 and pull requests; it does not publish to npm.
 
-## Candidate 1.1.16
+## Published 1.1.16
+
+Published to npm with the `latest` tag on 2026-09-15 (Pacific time), then tagged
+at `f714996` and released on
+[GitHub](https://github.com/peterwangsc/tailwint/releases/tag/v1.1.16).
+The complete four-job CI matrix passed for that release commit in
+[run 35051411180](https://github.com/peterwangsc/tailwint/actions/runs/35051411180).
+After registry processing completed, its tarball matched the validated local
+artifact byte-for-byte (SHA256 below); registry integrity and shasum also matched.
+A fresh strict registry install passed all 13 real CLI/API lint/fix/rescan smoke
+checks against language server 0.16.0 and Tailwind 4.0.17 on Mac Node 24.1.0.
 
 Current registry release was checked as 1.1.15. The candidate fixes issue #1 and
 the maintenance defects listed in CHANGELOG.md. Keep Node 18+ and the existing
@@ -33,7 +43,7 @@ Before publishing:
 A candidate version or tarball is not a published release. Changes to the
 candidate after testing require rebuilding and rechecking the affected behavior.
 
-## Candidate validation — 2026-09-15
+## Release validation — 2026-09-15
 
 The maintenance fixes are committed as `28a33c2`, `d8cb375`, `38ce388`, and
 `dfec713`, with dependency compatibility fixed in `401ad64`. Package and lockfile
@@ -54,8 +64,11 @@ in `6aed0f9`. npm authentication is restored. The four-job Linux/Windows, Node
   Checks cover JSONC settings, TSX-only lint/fix/rescan, special filenames, CRLF,
   unknown flags, malformed configuration, and the package's public API.
 - Fresh Windows tarball installations passed strict engine checks on Node 18
-  and 24. All 13 CLI/API checks and the npm command shim passed on each,
-  including special paths, backslash patterns, and CRLF preservation.
+  and 24. The final artifact passed 37 CLI/API checks per runtime: 13 original
+  smoke checks, 12 timeout/forward-slash-ignore checks, and 12 native-backslash
+  ignore checks. Lint/fix/rescan preserved CRLF, special filenames, user-excluded
+  files, and built-in output exclusions. Installed bin/dist files matched the
+  tested tarball byte-for-byte on both runtimes.
 - Bun 1.3.10 on Mac: installing the tarball with Bun passed, and the same
   13 CLI/API checks passed under both Node and the Bun runtime against server
   0.16.0. Reinstalling with Bun's isolated linker and rerunning under Bun also
