@@ -57,15 +57,24 @@ export interface TailwintOptions {
   timeoutMs?: number;
 }
 
+let running = false;
+
 export async function run(options: TailwintOptions = {}): Promise<number> {
-  resetState();
-  const t0 = Date.now();
-  const cwd = resolve(options.cwd || process.cwd());
-  const fix = options.fix ?? false;
-  const timeoutMs = options.timeoutMs ?? 30_000;
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeoutMs must be positive");
+  if (running) {
+    console.error("tailwint failed: concurrent run() calls are not supported; await the previous run.");
+    return 2;
+  }
+  running = true;
   const spinners: (() => void)[] = [];
   try {
+    resetState();
+    const t0 = Date.now();
+    const cwd = resolve(options.cwd || process.cwd());
+    const fix = options.fix ?? false;
+    const timeoutMs = options.timeoutMs ?? 30_000;
+    if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647) {
+      throw new Error("timeoutMs must be an integer between 1 and 2147483647");
+    }
     const patterns = options.patterns ?? DEFAULT_PATTERNS;
 
     const fileSet = new Set<string>();
@@ -169,8 +178,9 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
       let content: string;
       try {
         content = readFileSync(filePath, "utf-8");
-      } catch {
-        continue; // file may have been deleted between glob and read
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
       }
       fileContents.set(filePath, content);
       fileVersions.set(filePath, 1);
@@ -383,6 +393,6 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
     return 2;
   } finally {
     for (const stop of spinners) stop();
-    await shutdown();
+    try { await shutdown(); } finally { running = false; }
   }
 }

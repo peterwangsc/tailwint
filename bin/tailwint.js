@@ -13,16 +13,32 @@ function cleanup(signal) {
 process.on("SIGINT", () => cleanup("SIGINT"));
 process.on("SIGTERM", () => cleanup("SIGTERM"));
 
-const args = process.argv.slice(2);
+let fix = false;
+let help = false;
+let version = false;
+let literal = false;
+const patterns = [];
+for (const arg of process.argv.slice(2)) {
+  if (literal) patterns.push(arg);
+  else if (arg === "--") literal = true;
+  else if (arg === "--fix" || arg === "-f") fix = true;
+  else if (arg === "--help" || arg === "-h") help = true;
+  else if (arg === "--version" || arg === "-v") version = true;
+  else if (arg.startsWith("-")) {
+    console.error(`tailwint: unknown option ${arg}. Use --help for usage.`);
+    process.exit(2);
+  } else patterns.push(arg);
+}
 
-if (args.includes("--help") || args.includes("-h")) {
+if (help) {
   console.log(`
-  Usage: tailwint [--fix] [glob...]
+  Usage: tailwint [--fix] [--] [glob...]
 
   Options:
     --fix       Auto-fix all issues using LSP code actions
     --help      Show this help message
     --version   Show version number
+    --          Treat remaining arguments as file patterns
 
   Examples:
     tailwint                          Scan default file types
@@ -36,15 +52,12 @@ if (args.includes("--help") || args.includes("-h")) {
   process.exit(0);
 }
 
-if (args.includes("--version") || args.includes("-v")) {
+if (version) {
   const pkgPath = resolve(dirname(fileURLToPath(import.meta.url)), "../package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
   console.log(pkg.version);
   process.exit(0);
 }
-
-const fix = args.includes("--fix") || args.includes("-f");
-const patterns = args.filter((a) => a !== "--fix" && a !== "-f");
 
 run({ fix, patterns: patterns.length > 0 ? patterns : undefined }).then(
   (code) => process.exit(code),
