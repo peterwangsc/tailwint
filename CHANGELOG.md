@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.16 — release candidate
+## 1.1.16 — 2026-09-15
 
 - Fix premature “all clear” results on large workspaces and TSX-only scans (#1).
   Wait for language-server initialization and each file's diagnostics instead
