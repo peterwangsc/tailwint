@@ -4,7 +4,7 @@
 
 import { spawn, type ChildProcess } from "child_process";
 import { resolve } from "path";
-import { pathToFileURL } from "url";
+import { pathToFileURL, fileURLToPath } from "url";
 import { existsSync, readFileSync } from "fs";
 
 const DEBUG = process.env.DEBUG === "1";
@@ -56,8 +56,9 @@ function getSettingsSection(section: string): Record<string, any> {
   return result;
 }
 
-let server: ChildProcess;
+let server: ChildProcess | undefined;
 let serverDead = false;
+let serverStopping = false;
 let msgId = 0;
 
 const chunks: Buffer[] = [];
@@ -65,230 +66,59 @@ let chunksLen = 0;
 const pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
 
 export const diagnosticsReceived = new Map<string, any[]>();
-export let projectReady = false;
+const diagWaiters = new Map<string, { resolve: (diags: any[]) => void; reject: (error: Error) => void }>();
 
-// ---------------------------------------------------------------------------
-// Project-aware wait state
-// ---------------------------------------------------------------------------
-
-/** Tracking for projectInitialized events */
-export let projectInitCount = 0;
-export let settledProjects = 0;
-export let brokenProjects = 0;
-let lastInitMs = 0;
-let inBrokenSequence = false;
-
-let currentProjectDiagCount = 0;
-export const warnings: string[] = [];
-
-/** Internal waiter state */
-let projectWaitResolve: (() => void) | null = null;
-let diagDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-let projectInitTimer: ReturnType<typeof setTimeout> | null = null;
-let outerTimer: ReturnType<typeof setTimeout> | null = null;
-const diagWaiters = new Map<string, (diags: any[]) => void>();
-
-/** Config for the current wait */
-let waitConfig = { predictedRoots: 0, maxProjects: 0, initTimeoutMs: 5000, debounceMs: 500 };
-
-/** Reset module state between runs (for programmatic multi-run usage). */
+/** Reset module state between sequential programmatic runs. */
 export function resetState() {
   msgId = 0;
   serverDead = false;
+  serverStopping = false;
   chunks.length = 0;
   chunksLen = 0;
   pending.clear();
   diagnosticsReceived.clear();
-  projectReady = false;
-  projectInitCount = 0;
-  settledProjects = 0;
-  brokenProjects = 0;
-  lastInitMs = 0;
-  inBrokenSequence = false;
-
-  currentProjectDiagCount = 0;
-  warnings.length = 0;
-  projectWaitResolve = null;
-  bulkFlowStarted = false;
-  lastDiagReceivedMs = 0;
-  if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-  if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
-  if (outerTimer) { clearTimeout(outerTimer); outerTimer = null; }
   diagWaiters.clear();
   vscodeSettings = null;
 }
 
-function cleanupWaitTimers() {
-  if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-  if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
-  if (outerTimer) { clearTimeout(outerTimer); outerTimer = null; }
-}
-
-function finishWait() {
-  if (!projectWaitResolve) return;
-  const resolve = projectWaitResolve;
-  projectWaitResolve = null;
-  cleanupWaitTimers();
-  resolve();
-}
-
-function isAllResolved(): boolean {
-  const resolved = settledProjects + brokenProjects;
-  return resolved >= waitConfig.maxProjects;
-}
-
-function startProjectInitTimeout() {
-  if (projectInitTimer) clearTimeout(projectInitTimer);
-  projectInitTimer = setTimeout(() => {
-    if (currentProjectDiagCount > 0 && !bulkFlowStarted) {
-      // Diagnostics are arriving but the gap detector never triggered
-      // (e.g. no burst pause on this machine). Force bulk mode and let
-      // the debounce take over instead of giving up.
-      bulkFlowStarted = true;
-      startDiagDebounce();
-    } else if (currentProjectDiagCount > 0) {
-      settleCurrentProject();
-    } else {
-      finishWait();
-    }
-  }, waitConfig.initTimeoutMs);
-}
-
-function onProjectInitialized() {
-  projectInitCount++;
-  const now = Date.now();
-  projectReady = true;
-
-  if (lastInitMs > 0 && (now - lastInitMs) < 500) {
-    // Rapid re-init — broken project
-    if (!inBrokenSequence) {
-      // First rapid init after a healthy one — the previous healthy init was actually broken
-      inBrokenSequence = true;
-      brokenProjects++;
-      warnings.push(
-        "A CSS file failed to initialize (likely an @apply referencing an unknown utility). " +
-        "That project's files will not receive diagnostics. " +
-        "See https://github.com/tailwindlabs/tailwindcss-intellisense/issues/1121",
-      );
-      // The previous init was counted as starting a healthy project's diagnostic wait.
-      // Cancel that wait — this project won't produce diagnostics.
-      if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-    }
-    // Additional rapid inits for the same broken project — just update timestamp
-  } else {
-    // Healthy init — new project starting
-    inBrokenSequence = false;
-
-    currentProjectDiagCount = 0;
-    // Cancel any pending project-init timeout since we just got a new one
-    if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
-    if (diagDebounceTimer) { clearTimeout(diagDebounceTimer); diagDebounceTimer = null; }
-    // Don't start the diagnostic debounce yet — wait for the first diagnostic to arrive.
-    // Use the init timeout as the safety net (if no diagnostics arrive at all,
-    // this project is effectively broken even though it didn't rapid-fire).
-    startProjectInitTimeout();
-  }
-
-  lastInitMs = now;
-
-  // Check if broken projects pushed us to completion
-  if (isAllResolved()) {
-    finishWait();
-  }
-}
-
-function settleCurrentProject() {
-  settledProjects++;
-  if (isAllResolved()) {
-    finishWait();
-  } else {
-    startProjectInitTimeout();
-  }
-}
-
-function startDiagDebounce() {
-  if (diagDebounceTimer) clearTimeout(diagDebounceTimer);
-  // Cancel the init timeout — we're now in diagnostic-settling mode
-  if (projectInitTimer) { clearTimeout(projectInitTimer); projectInitTimer = null; }
-  diagDebounceTimer = setTimeout(settleCurrentProject, waitConfig.debounceMs);
-}
-
-let bulkFlowStarted = false;
-let lastDiagReceivedMs = 0;
-
-function onDiagnosticReceived() {
-  if (!projectWaitResolve) return;
-  currentProjectDiagCount++;
-
-  const now = Date.now();
-  const gap = lastDiagReceivedMs > 0 ? now - lastDiagReceivedMs : 0;
-  lastDiagReceivedMs = now;
-
-  if (!bulkFlowStarted) {
-    // The LSP sends a small burst of trivial diagnostics, then pauses while it
-    // resolves the Tailwind project config, then streams the real bulk.
-    // Settling inside that pause would pass files it had not checked yet, so
-    // the debounce may not start until the pause is over.
-    //
-    // projectInitialized IS the end of that pause — ask the server rather than
-    // inferring it from arrival gaps. The gap test stays as a fallback for a
-    // server that streams before announcing init, but it must not be the only
-    // trigger: a project whose diagnostics arrive as one uninterrupted stream
-    // never produces a gap, so the debounce never started and the run sat on
-    // the 5s init timeout instead. That was 4.8s of idle on a 571-file tree.
-    if (projectReady || gap >= 100) {
-      bulkFlowStarted = true;
-    }
-  }
-
-  if (bulkFlowStarted) {
-    startDiagDebounce();
-  }
-}
-
 /**
- * Wait for all expected projects to be resolved (settled or broken).
- *
- * @param predictedRoots - Number of CSS files predicted to be project roots
- * @param maxProjects - Upper bound (predictedRoots + predictedNonRoots)
- * @param initTimeoutMs - How long to wait for each projectInitialized event
- * @param debounceMs - Silence window to consider diagnostics "settled"
+ * Tailwind's hover handler awaits workspace initialization. Project notifications
+ * and silence between diagnostics do not guarantee that initialization is done.
+ * Once the request completes, ask the server which files have an enabled project
+ * and wait for their individual publications, including empty diagnostic lists.
  */
-export function waitForAllProjects(
-  predictedRoots: number,
-  maxProjects: number,
-  initTimeoutMs = 5_000,
-  debounceMs = 500,
-): Promise<void> {
-  if (serverDead || maxProjects === 0) return Promise.resolve();
+export async function waitForDiagnostics(uris: string[], timeoutMs = 30_000): Promise<void> {
+  if (uris.length === 0) return;
+  await send("textDocument/hover", {
+    textDocument: { uri: uris[0] }, position: { line: 0, character: 0 },
+  }, timeoutMs);
 
-  waitConfig = { predictedRoots, maxProjects, initTimeoutMs, debounceMs };
-
-  return new Promise((res) => {
-    projectWaitResolve = res;
-
-    // Start waiting for first project init
-    startProjectInitTimeout();
-
-    // Hard outer timeout — never wait longer than this
-    const outerMs = initTimeoutMs + (maxProjects * 3000) + 5000;
-    outerTimer = setTimeout(finishWait, Math.min(outerMs, 30_000));
-  });
+  await Promise.all(uris.map(async (uri) => {
+    const project = await send("@/tailwindCSS/getProject", { uri }, timeoutMs);
+    if (!project) {
+      throw new Error(`No initialized Tailwind project for ${uri}. Check the Tailwind configuration and DEBUG=1 output; scan is incomplete.`);
+    }
+    // Publications may arrive while the initialization request is in flight.
+    if (!diagnosticsReceived.has(normUri(uri))) {
+      await waitForDiagnostic(uri, timeoutMs);
+    }
+  }));
 }
 
-/** Returns a promise that resolves when diagnostics are published for a specific URI. */
-export function waitForDiagnostic(uri: string, timeoutMs = 10_000): Promise<any[]> {
-  if (serverDead) return Promise.resolve([]);
-  // Clear stale entry so we wait for the server to re-publish
+/** Wait for a fresh publication; a timeout or server failure is never "clean". */
+export function waitForDiagnostic(uri: string, timeoutMs = 30_000): Promise<any[]> {
+  if (serverDead || !server) return Promise.reject(new Error("language server is not running"));
+  uri = normUri(uri);
   diagnosticsReceived.delete(uri);
-  return new Promise((res) => {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      if (diagWaiters.has(uri)) {
-        diagWaiters.delete(uri);
-        res([]);
-      }
+      diagWaiters.delete(uri);
+      reject(new Error(`Timed out waiting for diagnostics for ${uri}; scan is incomplete.`));
     }, timeoutMs);
-    diagWaiters.set(uri, (diags) => { clearTimeout(timer); res(diags); });
+    diagWaiters.set(uri, {
+      resolve: (diags) => { clearTimeout(timer); resolve(diags); },
+      reject: (error) => { clearTimeout(timer); reject(error); },
+    });
   });
 }
 
@@ -350,13 +180,18 @@ function processMessages() {
       continue;
     }
 
-    if (DEBUG) console.error(`<- ${msg.method || `response#${msg.id}`}`);
+    if (DEBUG) {
+      console.error(`<- ${msg.method || `response#${msg.id}`}`);
+      if (msg.method === "window/logMessage" || msg.method === "window/showMessage") {
+        console.error(msg.params?.message);
+      }
+    }
 
     // Response to our request
     if (msg.id != null && !msg.method && pending.has(msg.id)) {
       const p = pending.get(msg.id)!;
       pending.delete(msg.id);
-      if (msg.error) p.reject(msg.error);
+      if (msg.error) p.reject(new Error(msg.error.message || "Language server request failed"));
       else p.resolve(msg.result);
       continue;
     }
@@ -369,30 +204,22 @@ function processMessages() {
           item.section ? getSettingsSection(item.section) : {},
         );
       }
-      server.stdin!.write(encode({ jsonrpc: "2.0", id: msg.id, result }));
+      server?.stdin!.write(encode({ jsonrpc: "2.0", id: msg.id, result }));
       continue;
     }
 
     // Published diagnostics
-    if (msg.method === "textDocument/publishDiagnostics" && msg.params) {
+    if (msg.method === "textDocument/publishDiagnostics" && msg.params && !serverStopping) {
       const uri = normUri(msg.params.uri);
       const diags = msg.params.diagnostics || [];
       diagnosticsReceived.set(uri, diags);
 
       // Resolve URI-specific waiter
       if (diagWaiters.has(uri)) {
-        const resolve = diagWaiters.get(uri)!;
+        const waiter = diagWaiters.get(uri)!;
         diagWaiters.delete(uri);
-        resolve(diags);
+        waiter.resolve(diags);
       }
-
-      // Notify the project-aware wait system
-      onDiagnosticReceived();
-    }
-
-    // Tailwind project initialized
-    if (msg.method === "@/tailwindCSS/projectInitialized") {
-      onProjectInitialized();
     }
   }
 }
@@ -406,40 +233,43 @@ function findLanguageServer(cwd: string): string[] {
   return existsSync(js) ? [process.execPath, js] : ["tailwindcss-language-server"];
 }
 
-/** Reject all pending requests and resolve all waiters. Called when the server dies. */
+/** Reject pending work when the server dies or shuts down. */
 function drainAll(reason: Error) {
   serverDead = true;
   for (const p of pending.values()) p.reject(reason);
   pending.clear();
-  finishWait();
-  for (const r of diagWaiters.values()) r([]);
+  for (const waiter of diagWaiters.values()) waiter.reject(reason);
   diagWaiters.clear();
 }
 
 export function startServer(root: string) {
   workspaceRoot = root;
   const [bin, ...args] = findLanguageServer(root);
-  server = spawn(bin, [...args, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+  const child = server = spawn(bin, [...args, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
+  // A previous run's close event may arrive after the next run has started.
+  const fail = (error: Error) => { if (server === child) drainAll(error); };
+  child.stdin!.on("error", fail);
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "ENOENT") {
       console.error("\n  \x1b[38;5;203m\x1b[1mERROR\x1b[0m @tailwindcss/language-server not found.");
       console.error("  Install it: \x1b[1mnpm install -D @tailwindcss/language-server\x1b[0m\n");
     }
-    drainAll(new Error(err.code === "ENOENT"
+    fail(new Error(err.code === "ENOENT"
       ? "@tailwindcss/language-server not found"
       : `language server error: ${err.message}`));
   });
 
   server.on("close", (code, signal) => {
-    if (!serverDead) {
-      drainAll(new Error(
+    if (server === child && !serverDead) {
+      fail(new Error(
         signal ? `language server killed by ${signal}` : `language server exited with code ${code}`,
       ));
     }
   });
 
   server.stdout!.on("data", (chunk: Buffer) => {
+    if (server !== child) return;
     chunks.push(chunk);
     chunksLen += chunk.length;
     processMessages();
@@ -450,22 +280,30 @@ export function startServer(root: string) {
   });
 }
 
-export function send(method: string, params: object): Promise<any> {
-  if (serverDead) return Promise.reject(new Error("language server is not running"));
+export function send(method: string, params: object, timeoutMs = 30_000): Promise<any> {
+  if (serverDead || !server) return Promise.reject(new Error("language server is not running"));
+  const child = server;
   const id = ++msgId;
   return new Promise((res, rej) => {
-    pending.set(id, { resolve: res, reject: rej });
-    try {
-      server.stdin!.write(encode({ jsonrpc: "2.0", id, method, params }));
-    } catch {
+    const timer = setTimeout(() => {
       pending.delete(id);
-      rej(new Error("language server is not running"));
+      rej(new Error(`Timed out waiting for ${method}; scan is incomplete.`));
+    }, timeoutMs);
+    pending.set(id, {
+      resolve: (value) => { clearTimeout(timer); res(value); },
+      reject: (error) => { clearTimeout(timer); rej(error); },
+    });
+    try {
+      child.stdin!.write(encode({ jsonrpc: "2.0", id, method, params }));
+    } catch {
+      pending.get(id)!.reject(new Error("language server is not running"));
+      pending.delete(id);
     }
   });
 }
 
 export function notify(method: string, params: object) {
-  if (serverDead) return;
+  if (serverDead || !server) return;
   try {
     server.stdin!.write(encode({ jsonrpc: "2.0", method, params }));
   } catch {
@@ -474,26 +312,36 @@ export function notify(method: string, params: object) {
 }
 
 export async function shutdown() {
-  if (serverDead) return;
-  await Promise.race([
-    send("shutdown", {}).catch(() => {}),
-    new Promise(r => setTimeout(r, 500)),
-  ]);
-  notify("exit", {});
-  serverDead = true;
-  try { server.stdin!.end(); } catch {}
-  try { server.stdout!.destroy(); } catch {}
-  try { server.stderr!.destroy(); } catch {}
-  server.kill();
+  if (!server) return;
+  const child = server;
+  serverStopping = true;
+  if (!serverDead) {
+    await send("shutdown", {}, 500).catch(() => {});
+    notify("exit", {});
+  }
+  drainAll(new Error("language server shut down"));
+  child.stdin!.end();
+  child.stdout!.destroy();
+  child.stderr!.destroy();
+  if (child.exitCode === null && child.signalCode === null) {
+    await new Promise<void>((resolve) => {
+      child.once("close", () => resolve());
+      child.kill();
+      // A stuck server must not keep the CLI alive after the shutdown deadline.
+      const timer = setTimeout(() => child.kill("SIGKILL"), 500);
+      child.once("close", () => clearTimeout(timer));
+    });
+  }
+  server = undefined;
 }
 
 export function fileUri(absPath: string): string {
   return normUri(pathToFileURL(absPath).href);
 }
 
-/** Decoded, lowercase-drive canonical form so our URIs and the server's compare equal on Windows. */
+/** Keep reserved characters escaped while normalizing drive letters and URI encoding. */
 export function normUri(uri: string): string {
-  return decodeURIComponent(uri).replace(/^file:\/\/\/(\w):/, (_, d) => `file:///${d.toLowerCase()}:`);
+  return pathToFileURL(fileURLToPath(uri)).href.replace(/^file:\/\/\/(\w):/, (_, d) => `file:///${d.toLowerCase()}:`);
 }
 
 export function langId(filePath: string): string {

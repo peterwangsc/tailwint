@@ -3,7 +3,7 @@
  */
 
 import { writeFileSync } from "fs";
-import { send, notify, fileUri, waitForDiagnostic } from "./lsp.js";
+import { send, notify, fileUri, normUri, waitForDiagnostic } from "./lsp.js";
 
 export interface TextEdit {
   range: { start: { line: number; character: number }; end: { line: number; character: number } };
@@ -77,6 +77,7 @@ export async function fixFile(
   fileContents: Map<string, string>,
   version: Map<string, number>,
   onPass?: (pass: number) => void,
+  timeoutMs = 30_000,
 ): Promise<FixResult> {
   const DEBUG = process.env.DEBUG === "1";
   const uri = fileUri(filePath);
@@ -94,7 +95,7 @@ export async function fixFile(
           textDocument: { uri },
           range: diag.range,
           context: { diagnostics: [diag], only: ["quickfix"] },
-        }).catch(() => null),
+        }, timeoutMs),
       ),
     );
 
@@ -104,8 +105,11 @@ export async function fixFile(
       if (!actions || actions.length === 0) continue;
 
       const action = actions[0];
-      const edits: TextEdit[] =
-        action.edit?.changes?.[uri] || action.edit?.documentChanges?.[0]?.edits || [];
+      const changes = action.edit?.changes || {};
+      const key = Object.keys(changes).find((key) => normUri(key) === uri);
+      const edits: TextEdit[] = (key ? changes[key] : undefined)
+        || action.edit?.documentChanges?.find((change: any) =>
+          change.textDocument && normUri(change.textDocument.uri) === uri)?.edits || [];
       if (edits.length === 0) continue;
 
       for (const e of edits) {
@@ -124,12 +128,13 @@ export async function fixFile(
     if (content === prev) break;
 
     ver++;
+    const nextDiagnostics = waitForDiagnostic(uri, timeoutMs);
     notify("textDocument/didChange", {
       textDocument: { uri, version: ver },
       contentChanges: [{ text: content }],
     });
 
-    diags = (await waitForDiagnostic(uri)).filter(
+    diags = (await nextDiagnostics).filter(
       (d: any) => d.severity === 1 || d.severity === 2,
     );
   }

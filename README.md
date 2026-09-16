@@ -146,6 +146,7 @@ const exitCode = await run({
 | ---------- | ---------- | -------------------------------------------------- | -------------------------------------------------- |
 | `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"]` | Glob patterns for files to scan                    |
 | `fix`      | `boolean`  | `false`                                            | Auto-fix issues using LSP code actions             |
+| `timeoutMs` | `number` | `30000` | Maximum wait per LSP request or pending file diagnostic |
 | `cwd`      | `string`   | `process.cwd()`                                    | Working directory for glob resolution and LSP root |
 
 ### Exports
@@ -164,7 +165,13 @@ tailwint exits with meaningful codes for CI pipelines:
 | --------- | ---------------------------------------------------------------- |
 | `0`       | No issues found, or all issues fixed with `--fix`                |
 | `1`       | Issues found, or unfixable issues remain after `--fix`           |
-| `2`       | Fatal error (language server not found, crash)                   |
+| `2`       | Incomplete scan or fatal error (missing project, timeout, server failure) |
+
+A timeout or missing Tailwind project is an incomplete scan, so it exits with `2`
+instead of reporting “all clear.” Check the Tailwind configuration with
+`DEBUG=1 npx tailwint`. Narrow the patterns if they include files outside your
+Tailwind projects. For unusually slow projects, increase `timeoutMs` through the
+programmatic API. Failed fix validation leaves that file unchanged.
 
 ### GitHub Actions
 
@@ -182,9 +189,9 @@ npx tailwint --fix && git add -u
 ## How it works
 
 1. **Boot** — spawns `@tailwindcss/language-server` over stdio
-2. **Pre-scan** — classifies CSS files to predict how many Tailwind projects the server will create, skips unrelated CSS files
+2. **Pre-scan** — skips CSS files with no Tailwind signals
 3. **Open** — sends matched files to the server via `textDocument/didOpen`
-4. **Analyze** — waits for `textDocument/publishDiagnostics` notifications (event-driven, project-aware — tracks each project's initialization and diagnostics separately)
+4. **Analyze** — waits for workspace initialization using the server's `textDocument/hover` handler, checks each opened file with `@/tailwindCSS/getProject`, then waits for every file's `textDocument/publishDiagnostics` notification. CSS entry points need not be in the requested glob. Gaps between notifications do not end the scan.
 5. **Report** — collects diagnostics, categorizes as conflicts or canonical
 6. **Fix** _(if `--fix`)_ — requests `textDocument/codeAction` quickfixes and applies edits in a loop until no diagnostics remain
 
