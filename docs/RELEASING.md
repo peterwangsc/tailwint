@@ -36,7 +36,7 @@ candidate after testing require rebuilding and rechecking the affected behavior.
 ## Candidate validation — 2026-09-15
 
 The maintenance fixes are committed as `28a33c2`, `d8cb375`, `38ce388`, and
-`dfec713`, with a follow-up dependency compatibility fix. Package and lockfile
+`dfec713`, with dependency compatibility fixed in `401ad64`. Package and lockfile
 versions are 1.1.16. This remains an unpublished candidate; npm authentication returned E401. GitHub CI has not yet run for these
 local commits.
 
@@ -88,3 +88,11 @@ Node 18 contract in a patch release; it is a maintenance tradeoff, not a promise
 of future upstream support. A future breaking release should raise the Node
 minimum and return to the current glob line, or evaluate an actively maintained
 replacement with equivalent pattern behavior.
+
+## Release evidence
+
+- [Measured performance comparison and reproduction](PERFORMANCE.md): complete
+  98-file scans took 45.7% less elapsed time on Mac and 40.0% less on Windows in
+  the pinned fixtures. TSX-only results are a correctness fix, not a speed claim.
+- [Runtime-adoption assessment](NODE-SUPPORT.md): download counts and the small
+  public consumer sample cannot establish a reliable Node 18 user percentage.
