@@ -23,5 +23,7 @@
 - Reject unknown CLI flags; support `--` for option-like filenames.
 - Reject concurrent `run()` calls without disrupting the active run. Validate
   the new `timeoutMs` option before handing values to Node timers.
+- Use the Node 18-compatible glob dependency line so strict engine checks do
+  not reject installations through Node 20-only transitive dependencies.
 - Update vulnerable dependencies, add portable build/test commands, and run
   regression checks on Linux and Windows with Node 18 and 24.
