@@ -37,11 +37,14 @@ candidate after testing require rebuilding and rechecking the affected behavior.
 
 The maintenance fixes are committed as `28a33c2`, `d8cb375`, `38ce388`, and
 `dfec713`, with dependency compatibility fixed in `401ad64`. Package and lockfile
-versions are 1.1.16. This remains an unpublished candidate; npm authentication returned E401. GitHub CI has not yet run for these
-local commits.
+versions are 1.1.16. Timeout/exclusion controls were added in `2626502`, release
+notes finalized in `f812824`, and Windows backslash-ignore handling corrected
+in `6aed0f9`. npm authentication is restored. The four-job Linux/Windows, Node
+18/24 CI matrix passed for `6aed0f9` in
+[run 35051194534](https://github.com/peterwangsc/tailwint/actions/runs/35051194534).
 
-- Mac Node 18.20.8 and 24.1.0: 132 tests, 129 passed, three Windows-only skips.
-- Windows Node 18.20.8 and 24.18.0: 132 tests, 130 passed, two POSIX-only skips.
+- Mac Node 18.20.8 and 24.1.0: 138 tests, 134 passed, four Windows-only skips.
+- Windows Node 18.20.8 and 24.18.0: 138 tests, 136 passed, two POSIX-only skips.
   A separate Windows locked-file check correctly returned exit 2.
 - Clean installs (including strict Node 18 engine checking), build/declaration
   generation, and the prepublish build/test checks passed;
@@ -66,11 +69,44 @@ local commits.
   install/build produced an identical tarball.
 
 Local artifact: `tmp/release/tailwint-1.1.16.tgz` (ignored by Git).
-SHA256: `d605dedbcb3b4d1008e784dc3340b75f3f1b68e99c8be2cb832d2280bb258d80`.
+Final artifact SHA256: `9c9775b2e80020bcf358b6e53e04786a46e71813114835b226210fc70a7b8ffe`.
 
-Before publication, push the reviewed commits and require the CI matrix to
-pass, restore npm authentication, and
-confirm the registry is still at the expected previous release.
+### Timeout follow-up
+
+The earlier full scan of the historical trainsim workspace still failed after
+30.973 seconds. It selected four generated Chromium license HTML documents,
+each approximately 15–16 MB. A source-only scan completed in 0.297 seconds;
+the final API with `ignore: ["release/**"]` completed in 0.298 seconds (12/12
+selected files received, exit 0). Selecting just one generated license page
+exhausted a 1,500 ms deadline and exited 2 after 2.211 seconds including startup
+and shutdown. These are single diagnostic reproductions, not benchmark medians.
+
+The default remains 30 seconds, exposed through CLI `--timeout <ms>` and API
+`timeoutMs`. Initial readiness, project lookup, and diagnostic delivery share
+one budget; the LSP initialize handshake and autofix operations have separate
+budgets. CLI `--ignore <glob>` and API `ignore` let callers omit generated trees
+before reading or sending their files. Normal success has no fixed wait.
+
+The first CI attempt failed only the JSONC integration test on Windows Node 18:
+its artificial five-second hover budget expired. The PC reproduced the same
+failure with six test processes restricted to two logical CPUs; unloaded runs
+passed. The JSONC test now uses the production timeout with an outer 90-second
+test limit. Dedicated fixture tests still verify stalled-server failure and
+that initialization stages cannot each renew the deadline. The updated test
+also passed all six deliberately contended Windows copies (approximately
+12 seconds each).
+
+Fresh Windows artifact testing caught a backslash-ignore defect: glob
+10 does not apply `windowsPathsNoEscape` to its ignore matcher. Additional
+ignore patterns are now normalized on Windows before matching, with a dedicated
+API/CLI regression covering paths containing spaces, percent, hash, and Unicode.
+
+The timeout-control tarball was rechecked on Mac Node 18/24 with language
+servers 0.14.0 and 0.16.0, and with Bun against 0.16.0 (13 artifact checks in each
+combination). After the Windows-only ignore correction, the final tarball passed
+those 13 artifact checks again on Mac Node 18/24 and Bun against server 0.16.0.
+A strict Node 18 install passed, npm audit reported zero vulnerabilities, and
+all 17 packed file entries and the publish dry run were checked again.
 
 ## Node 18 dependency compatibility
 
@@ -92,7 +128,7 @@ replacement with equivalent pattern behavior.
 ## Release evidence
 
 - [Measured performance comparison and reproduction](PERFORMANCE.md): complete
-  98-file scans took 45.7% less elapsed time on Mac and 40.0% less on Windows in
+  98-file scans took 45.3% less elapsed time on Mac and 40.1% less on Windows in
   the pinned fixtures. TSX-only results are a correctness fix, not a speed claim.
 - [Runtime-adoption assessment](NODE-SUPPORT.md): download counts and the small
   public consumer sample cannot establish a reliable Node 18 user percentage.

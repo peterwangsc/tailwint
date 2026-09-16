@@ -1,7 +1,11 @@
 # 1.1.16 performance comparison
 
-Measured 2026-09-15 against the published npm package 1.1.15 and the final
-1.1.16 candidate (`d605dedbcb3b4d1008e784dc3340b75f3f1b68e99c8be2cb832d2280bb258d80`).
+Measured 2026-09-15 against the published npm package 1.1.15. Results below
+use the 1.1.16 candidate after adding timeout/ignore controls
+(SHA256 `c5549a1351cf24c65a58deb8454263644998ee36192eea4cb3cbc32c985e87d4`).
+The release subsequently added a Windows backslash-ignore correction, covered
+by regression and artifact tests. These benchmarks use no custom exclusions;
+that last correction was not separately benchmarked.
 
 ## Mac results
 
@@ -11,12 +15,12 @@ and TSX files with two class-conflict diagnostics each.
 
 | Scan | 1.1.15 median (range) | 1.1.16 median (range) | Correctness and improvement |
 | --- | ---: | ---: | --- |
-| 4 TSX + 2 CSS files | 1.036 s (1.033–1.045) | 0.562 s (0.544–0.569) | Both complete: 8 diagnostics; 45.7% less elapsed time |
-| 96 TSX + 2 CSS files | 1.075 s (1.067–1.078) | 0.584 s (0.576–0.594) | Both complete: 192 diagnostics; 45.7% less elapsed time |
-| 96 TSX, CSS omitted from glob | 0.165 s (0.164–0.168) | 0.587 s (0.576–0.595) | Old: false clean, 0/96 files received. New: 96/96 and 192 diagnostics. Not a speed comparison |
+| 4 TSX + 2 CSS files | 1.046 s (1.041–1.057) | 0.569 s (0.551–0.571) | Both complete: 8 diagnostics; 45.6% less elapsed time |
+| 96 TSX + 2 CSS files | 1.084 s (1.080–1.085) | 0.593 s (0.576–0.596) | Both complete: 192 diagnostics; 45.3% less elapsed time |
+| 96 TSX, CSS omitted from glob | 0.168 s (0.165–0.170) | 0.589 s (0.578–0.604) | Old: false clean, 0/96 files received. New: 96/96 and 192 diagnostics. Not a speed comparison |
 
 All five measured runs agreed on diagnostic counts and completion status.
-The complete scans are about 1.84 times as fast on these fixtures. The roughly
+The complete scans are about 1.83 times as fast on these fixtures. The roughly
 half-second saving is consistent with replacing the old 500 ms diagnostic-gap
 heuristic with explicit initialization and per-file completion checks. This is
 an inference from the code and timings, not a CPU profile.
@@ -32,8 +36,8 @@ CSS entry points, with the same 192 expected conflict diagnostics.
 
 | Scan | 1.1.15 median (range) | 1.1.16 median (range) | Result |
 | --- | ---: | ---: | --- |
-| 96 TSX + 2 CSS files | 1.236 s (1.215–1.249) | 0.742 s (0.725–0.747) | Both complete; 40.0% less elapsed time, 1.67x as fast |
-| 96 TSX, CSS omitted from glob | 0.213 s (0.211–0.214) | 0.735 s (0.720–0.755) | Old: false clean, 0/96. New: complete, 96/96. Not a speed comparison |
+| 96 TSX + 2 CSS files | 1.215 s (1.204–1.231) | 0.728 s (0.725–0.747) | Both complete; 40.1% less elapsed time, 1.67x as fast |
+| 96 TSX, CSS omitted from glob | 0.212 s (0.208–0.214) | 0.731 s (0.720–0.731) | Old: false clean, 0/96. New: complete, 96/96. Not a speed comparison |
 
 All five measured complete runs of each version produced the same per-file
 normalized diagnostic signature. The Windows fixture also contained
