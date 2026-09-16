@@ -1,7 +1,7 @@
 {
   "name": "tailwint",
-  "version": "1.1.15",
-  "description": "Tiny Tailwind CSS linter and auto-fixer for CI — powered by the official language server, not regex",
+  "version": "1.1.16",
+  "description": "Tiny Tailwind CSS linter and auto-fixer for CI \u2014 powered by the official language server, not regex",
   "license": "MIT",
   "author": "Peter Wang",
   "homepage": "https://github.com/peterwangsc/tailwint",
@@ -49,13 +49,14 @@
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "npm run clean && esbuild src/index.ts src/edits.ts src/lsp.ts src/prescan.ts src/ui.ts src/settings.ts --outdir=dist --format=esm --platform=node --target=node18 --minify && tsc --emitDeclarationOnly",
     "test": "node tests/run.mjs",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "glob": "^13.0.6",

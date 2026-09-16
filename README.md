@@ -14,7 +14,7 @@
 
 ---
 
-The same diagnostics VS Code shows — but from the command line. Catches class conflicts, suggests canonical rewrites, and auto-fixes everything. Powered by the official `@tailwindcss/language-server` — not a custom parser, not a regex hack.
+The same diagnostics VS Code shows — but from the command line. Catches class conflicts, suggests canonical rewrites, and applies available quick fixes. Powered by the official `@tailwindcss/language-server` — not a custom parser, not a regex hack.
 
 **Works with Tailwind CSS v4.**
 
@@ -22,7 +22,7 @@ The same diagnostics VS Code shows — but from the command line. Catches class 
 
 tailwint detects two categories of issues:
 
-**⚡ Conflicts** — classes that apply the same CSS properties, where the last one wins and the rest are dead code:
+**⚡ Conflicts** — classes that apply the same CSS properties and compete in the CSS cascade:
 
 ```
 ⚡ 3:21  conflict  'w-full' applies the same CSS properties as 'w-auto'
@@ -52,7 +52,7 @@ npx tailwint
 # Scan specific files
 npx tailwint "src/**/*.tsx"
 
-# Auto-fix all issues
+# Apply available quick fixes
 npx tailwint --fix
 npx tailwint -f
 
@@ -137,8 +137,11 @@ const exitCode = await run({
   patterns: ["src/**/*.tsx"],
   fix: true,
   cwd: "/path/to/project",
+  timeoutMs: 30_000,
 });
 ```
+
+Call `run()` sequentially. A concurrent call returns `2` without interrupting the active scan.
 
 ### Options
 
@@ -146,7 +149,7 @@ const exitCode = await run({
 | ---------- | ---------- | -------------------------------------------------- | -------------------------------------------------- |
 | `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"]` | Glob patterns for files to scan                    |
 | `fix`      | `boolean`  | `false`                                            | Auto-fix issues using LSP code actions             |
-| `timeoutMs` | `number` | `30000` | Maximum wait per LSP request or pending file diagnostic |
+| `timeoutMs` | `number` | `30000` | Maximum wait per LSP request or pending file diagnostic; integer 1–2147483647 |
 | `cwd`      | `string`   | `process.cwd()`                                    | Working directory for glob resolution and LSP root |
 
 ### Exports
@@ -156,6 +159,24 @@ const exitCode = await run({
 | `run(options?)`              | Run the linter, returns exit code  |
 | `applyEdits(content, edits)` | Apply LSP text edits to a string   |
 | `TextEdit`                   | TypeScript type for LSP text edits |
+
+## Configuration
+
+Tailwint reads `.vscode/settings.json` from the working directory and forwards
+its settings to the language server. JSONC line/block comments and trailing
+commas are supported; malformed settings cause exit `2` rather than silently
+using default lint rules. For example:
+
+```jsonc
+{
+  "tailwindCSS.lint.cssConflict": "error",
+  "tailwindCSS.experimental.classRegex": ["tw`([^`]*)`"],
+}
+```
+
+Language-server installs hoisted into a parent workspace or installed beside
+Tailwint are resolved automatically. Windows file patterns may use either slash
+style. Unknown CLI options exit `2`; use `--` before an option-like filename.
 
 ## CI integration
 
@@ -193,9 +214,13 @@ npx tailwint --fix && git add -u
 3. **Open** — sends matched files to the server via `textDocument/didOpen`
 4. **Analyze** — waits for workspace initialization using the server's `textDocument/hover` handler, checks each opened file with `@/tailwindCSS/getProject`, then waits for every file's `textDocument/publishDiagnostics` notification. CSS entry points need not be in the requested glob. Gaps between notifications do not end the scan.
 5. **Report** — collects diagnostics, categorizes as conflicts or canonical
-6. **Fix** _(if `--fix`)_ — requests `textDocument/codeAction` quickfixes and applies edits in a loop until no diagnostics remain
+6. **Fix** _(if `--fix`)_ — requests `textDocument/codeAction` quickfixes and repeats until diagnostics clear or no supported fix changes the file
 
-The fix loop is unbounded — it keeps applying edits until the file stabilizes. A single pass may not resolve everything (e.g., fixing a conflict can reveal a canonical issue underneath), so the loop continues as long as edits produce changes.
+There is no fixed pass limit: fixing a conflict can reveal another issue. Repeated
+fix cycles and invalid edits fail with exit `2`, preserving that file on disk.
+Overlapping actions are deferred until fresh diagnostics, and files changed
+during the scan are not overwritten. Actions requiring multiple files or
+commands are left unresolved; remaining diagnostics produce exit `1`.
 
 ## Requirements
 
