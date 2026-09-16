@@ -99,3 +99,22 @@ test('additional ignore patterns exclude generated files through the API and CLI
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /sent 1 file/);
 });
+
+test('Windows backslash ignore patterns exclude special-character directories', {
+  skip: process.platform !== 'win32',
+}, async t => {
+  const cwd = workspace(t);
+  const dir = 'release 50% # 日本語';
+  mkdirSync(join(cwd, dir));
+  writeFileSync(join(cwd, dir, 'artifact.html'), '<div/>');
+  writeFileSync(join(cwd, 'page.tsx'), '<div/>');
+  const { diagnosticsReceived, fileUri } = await import('../src/lsp.js');
+  const pattern = `${dir}\\**`;
+  assert.equal(await run({ cwd, ignore: [pattern] }), 1);
+  assert.deepEqual([...diagnosticsReceived.keys()], [fileUri(join(cwd, 'page.tsx'))]);
+  const result = spawnSync(process.execPath, [cli, '--ignore', pattern], {
+    cwd, encoding: 'utf8', timeout: 10_000,
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /sent 1 file/);
+});

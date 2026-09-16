@@ -87,7 +87,9 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
         absolute: true,
         nodir: true,
         ignore: [
-          ...(options.ignore ?? []),
+          // glob's ignore matcher does not inherit windowsPathsNoEscape.
+          ...(options.ignore ?? []).map(pattern => process.platform === "win32"
+            ? pattern.replace(/\\/g, "/") : pattern),
           "**/node_modules/**",
           "**/dist/**",
           "**/build/**",
