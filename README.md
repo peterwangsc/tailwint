@@ -59,6 +59,12 @@ npx tailwint -f
 # Fix specific files
 npx tailwint --fix "app/**/*.tsx"
 
+# Exclude generated files (repeat --ignore for additional patterns)
+npx tailwint --ignore "release/**"
+
+# Adjust the language-server wait limit, in milliseconds
+npx tailwint --timeout 60000
+
 # Verbose LSP logging
 DEBUG=1 npx tailwint
 ```
@@ -148,8 +154,9 @@ Call `run()` sequentially. A concurrent call returns `2` without interrupting th
 | Option     | Type       | Default                                            | Description                                        |
 | ---------- | ---------- | -------------------------------------------------- | -------------------------------------------------- |
 | `patterns` | `string[]` | `["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"]` | Glob patterns for files to scan                    |
+| `ignore` | `string[]` | `[]` | Additional exclusions, relative to `cwd`, alongside built-in output/cache exclusions |
 | `fix`      | `boolean`  | `false`                                            | Auto-fix issues using LSP code actions             |
-| `timeoutMs` | `number` | `30000` | Maximum wait per LSP request or pending file diagnostic; integer 1–2147483647 |
+| `timeoutMs` | `number` | `30000` | Maximum wait per LSP operation; initial diagnostics share one deadline. Integer 1–2147483647 |
 | `cwd`      | `string`   | `process.cwd()`                                    | Working directory for glob resolution and LSP root |
 
 ### Exports
@@ -191,8 +198,17 @@ tailwint exits with meaningful codes for CI pipelines:
 A timeout or missing Tailwind project is an incomplete scan, so it exits with `2`
 instead of reporting “all clear.” Check the Tailwind configuration with
 `DEBUG=1 npx tailwint`. Narrow the patterns if they include files outside your
-Tailwind projects. For unusually slow projects, increase `timeoutMs` through the
-programmatic API. Failed fix validation leaves that file unchanged.
+Tailwind projects, or use `--ignore "release/**"` to exclude generated artifacts.
+For unusually slow projects, increase `--timeout 60000` (API: `timeoutMs`). A
+smaller value fails faster on a stalled server. This is a maximum wait, not a
+delay: successful operations finish as soon as their responses arrive.
+
+The initial hover readiness request, project lookups, and diagnostic publications
+share one timeout budget, rather than restarting it at each stage. The LSP
+initialize handshake and subsequent autofix requests/publications each have
+their own budget, so this is not a total CLI runtime limit. Removing the limit
+would allow an unresponsive server to hang CI indefinitely. Failed fix validation
+leaves that file unchanged.
 
 ### GitHub Actions
 

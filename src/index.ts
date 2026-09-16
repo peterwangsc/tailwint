@@ -51,9 +51,11 @@ const DEFAULT_PATTERNS = ["**/*.{tsx,jsx,html,vue,svelte,astro,mdx,css}"];
 
 export interface TailwintOptions {
   patterns?: string[];
+  /** Additional glob patterns to exclude, relative to cwd. */
+  ignore?: string[];
   fix?: boolean;
   cwd?: string;
-  /** Maximum wait for a language-server request or a file's diagnostics. */
+  /** Maximum wait per LSP operation; initial diagnostics share one deadline. */
   timeoutMs?: number;
 }
 
@@ -85,6 +87,7 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
         absolute: true,
         nodir: true,
         ignore: [
+          ...(options.ignore ?? []),
           "**/node_modules/**",
           "**/dist/**",
           "**/build/**",
@@ -390,6 +393,9 @@ export async function run(options: TailwintOptions = {}): Promise<number> {
   } catch (error) {
     for (const stop of spinners.splice(0)) stop();
     console.error(`\n  ${c.red}${c.bold}tailwint failed:${c.reset} ${error instanceof Error ? error.message : error}`);
+    if (error instanceof Error && error.message.startsWith("Timed out waiting")) {
+      console.error("  Exclude generated files with --ignore <glob>, narrow the scan patterns, or adjust --timeout <ms> (API: ignore / timeoutMs). Use DEBUG=1 for LSP details.");
+    }
     return 2;
   } finally {
     for (const stop of spinners) stop();

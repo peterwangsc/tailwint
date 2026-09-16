@@ -34,7 +34,7 @@ function receive(message) {
     if (scenario.crash) return setTimeout(() => process.exit(7), 20);
     if (!scenario.hang) setTimeout(() => send({ id, result: null }), scenario.initDelay ?? 20);
   } else if (method === '@/tailwindCSS/getProject') {
-    send({ id, result: scenario.noProject ? null : { version: '4.1.0' } });
+    setTimeout(() => send({ id, result: scenario.noProject ? null : { version: '4.1.0' } }), scenario.projectDelay ?? 0);
   } else if (method === 'textDocument/codeAction') {
     if (scenario.actionError) return send({ id, error: { code: -32603, message: 'action failed' } });
     send({ id, result: [{ edit: { changes: {

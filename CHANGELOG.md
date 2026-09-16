@@ -21,6 +21,9 @@
 - Resolve hoisted language-server installs and package peers without relying
   on a shell executable being on PATH.
 - Reject unknown CLI flags; support `--` for option-like filenames.
+- Add `--timeout <ms>` and repeatable `--ignore <glob>` controls (API:
+  `timeoutMs` and `ignore`). Initial readiness, project lookup, and diagnostic
+  delivery share one deadline instead of renewing the timeout at each stage.
 - Reject concurrent `run()` calls without disrupting the active run. Validate
   the new `timeoutMs` option before handing values to Node timers.
 - Use the Node 18-compatible glob dependency line so strict engine checks do

@@ -57,6 +57,23 @@ test('keeps diagnostics that arrive before initialization completes', async t =>
   } finally { await shutdown(); }
 });
 
+test('initialization and project lookup cannot each renew the diagnostic deadline', async t => {
+  const root = workspace(t, { initDelay: 300, projectDelay: 300, delays: [10] });
+  const uris = await connect(root, ['page.tsx']);
+  try {
+    // Each individual stage fits in 500ms, but the combined operation does not.
+    await assert.rejects(waitForDiagnostics(uris, 500), /Timed out waiting/);
+  } finally { await shutdown(); }
+});
+
+test('diagnostic publication cannot renew the deadline after initialization', async t => {
+  const root = workspace(t, { initDelay: 300, delays: [650] });
+  const uris = await connect(root, ['page.tsx']);
+  try {
+    await assert.rejects(waitForDiagnostics(uris, 500), /Timed out waiting/);
+  } finally { await shutdown(); }
+});
+
 for (const [name, scenario, expected] of [
   ['missing diagnostics', { missing: true }, /Timed out waiting for diagnostics/],
   ['stalled initialization', { hang: true }, /Timed out waiting for textDocument\/hover/],

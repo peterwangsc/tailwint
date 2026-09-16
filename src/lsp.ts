@@ -5,6 +5,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { resolve } from "path";
 import { createRequire } from "node:module";
+import { performance } from "node:perf_hooks";
 import { pathToFileURL, fileURLToPath } from "url";
 import { readSettings, getSettingsSection } from "./settings.js";
 
@@ -45,18 +46,26 @@ export function resetState() {
  */
 export async function waitForDiagnostics(uris: string[], timeoutMs = 30_000): Promise<void> {
   if (uris.length === 0) return;
+  // Initialization, project lookup, and diagnostic delivery share one budget.
+  // Renewing it at each stage could otherwise turn a 30s limit into 90s.
+  const deadline = performance.now() + timeoutMs;
+  const remaining = () => {
+    const ms = Math.ceil(deadline - performance.now());
+    if (ms <= 0) throw new Error(`Timed out waiting for initial diagnostics after ${timeoutMs} ms; scan is incomplete.`);
+    return ms;
+  };
   await send("textDocument/hover", {
     textDocument: { uri: uris[0] }, position: { line: 0, character: 0 },
-  }, timeoutMs);
+  }, remaining());
 
   await Promise.all(uris.map(async (uri) => {
-    const project = await send("@/tailwindCSS/getProject", { uri }, timeoutMs);
+    const project = await send("@/tailwindCSS/getProject", { uri }, remaining());
     if (!project) {
       throw new Error(`No initialized Tailwind project for ${uri}. Check the Tailwind configuration and DEBUG=1 output; scan is incomplete.`);
     }
     // Publications may arrive while the initialization request is in flight.
     if (!diagnosticsReceived.has(normUri(uri))) {
-      await waitForDiagnostic(uri, timeoutMs);
+      await waitForDiagnostic(uri, remaining());
     }
   }));
 }

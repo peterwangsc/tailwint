@@ -60,7 +60,7 @@ test('dotted keys cannot mutate Object.prototype or expose inherited properties'
   assert.equal(getSettingsSection({}, 'constructor'), null);
 });
 
-test('real LSP honors lint settings in JSONC containing URLs and block comments', { timeout: 15_000 }, async t => {
+test('real LSP honors lint settings in JSONC containing URLs and block comments', { timeout: 90_000 }, async t => {
   const { run } = await import('../src/index.js');
   const { symlinkSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
@@ -73,7 +73,8 @@ test('real LSP honors lint settings in JSONC containing URLs and block comments'
   writeFileSync(join(root, 'package.json'), '{"private":true}');
   writeFileSync(join(root, 'app.css'), '@import "tailwindcss";');
   writeFileSync(join(root, 'page.tsx'), '<div className="w-full w-auto" />');
-  assert.equal(await run({ cwd: root, timeoutMs: 5000 }), 0);
+  // This tests configuration, not startup speed on a contended CI worker.
+  assert.equal(await run({ cwd: root }), 0);
   writeFileSync(join(root, '.vscode/settings.json'), '{bad}');
-  assert.equal(await run({ cwd: root, timeoutMs: 5000 }), 2);
+  assert.equal(await run({ cwd: root }), 2);
 });
